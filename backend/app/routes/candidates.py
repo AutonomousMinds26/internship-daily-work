@@ -19,7 +19,8 @@ router = APIRouter(tags=["candidates"])
 
 # Endpoints authorization checkers
 recruiter_admin_checker = RoleChecker(allowed_roles=["Recruiter", "Admin"])
-any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
+any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin", "Candidate"])
+status_update_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
 
 def serialize_candidate(c: Candidate) -> dict:
     """Helper to convert Candidate model to dict for Redis caching."""
@@ -138,8 +139,41 @@ def get_candidate(
 ):
     """
     Get all candidates or retrieve a single candidate (uses cache-aside strategy).
-    Access permitted for Recruiters, Hiring Managers, and Admins.
+    Access permitted for Recruiters, Hiring Managers, Admins, and Candidates (restricted to self).
     """
+    if _current_user.role == "Candidate":
+        if id is not None:
+            # Check if this candidate ID matches current user's email
+            cached_cand = get_cached_candidate(id)
+            if cached_cand:
+                if cached_cand["email"] != _current_user.username:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied to other candidates' profiles."
+                    )
+                return cached_cand
+            
+            candidate = db.query(Candidate).filter(Candidate.id == id).first()
+            if not candidate:
+                logger.warning(f"Candidate {id} not found in DB.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Candidate with ID {id} not found."
+                )
+            if candidate.email != _current_user.username:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to other candidates' profiles."
+                )
+            cand_dict = serialize_candidate(candidate)
+            cache_candidate(id, cand_dict)
+            return candidate
+        else:
+            # Candidate gets only their own profile
+            logger.info(f"Candidate {_current_user.username} retrieving their own profile.")
+            candidate = db.query(Candidate).filter(Candidate.email == _current_user.username).first()
+            return [candidate] if candidate else []
+
     if id is not None:
         # Cache-aside lookup
         cached_cand = get_cached_candidate(id)
@@ -174,7 +208,7 @@ def get_score(
 ):
     """
     Calculate and retrieve candidate compatibility score against a job.
-    Access permitted for Recruiters, Hiring Managers, and Admins.
+    Access permitted for Recruiters, Hiring Managers, Admins, and Candidates (restricted to self).
     """
     logger.info(f"Calculating match score: Candidate {candidate_id} vs Job {job_id}")
     
@@ -184,6 +218,7 @@ def get_score(
         # Recreate list objects/experience from cache
         cand_skills = candidate_data["skills"]
         cand_exp = candidate_data["experience"]
+        cand_email = candidate_data["email"]
     else:
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if not candidate:
@@ -193,8 +228,16 @@ def get_score(
             )
         cand_skills = candidate.skills
         cand_exp = candidate.experience
+        cand_email = candidate.email
         # Cache candidate for future use
         cache_candidate(candidate_id, serialize_candidate(candidate))
+
+    # Candidate security check
+    if _current_user.role == "Candidate" and cand_email != _current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to other candidates' scores."
+        )
 
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -227,7 +270,7 @@ def update_candidate_status(
     candidate_id: int,
     status_in: CandidateStatusUpdate,
     db: Session = Depends(get_db),
-    _current_user = Depends(any_auth_checker)
+    _current_user = Depends(status_update_checker)
 ):
     """
     Update candidate status. Restricted to Recruiter, Hiring Manager, and Admin.

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/job", tags=["jobs"])
 
 # Allowed roles: Recruiter, Admin
 recruiter_admin_checker = RoleChecker(allowed_roles=["Recruiter", "Admin"])
-any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
+any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin", "Candidate"])
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)

@@ -22,7 +22,8 @@ def seed_users():
         users = [
             ("admin_user", "Admin"),
             ("recruiter_user", "Recruiter"),
-            ("manager_user", "Hiring Manager")
+            ("manager_user", "Hiring Manager"),
+            ("alice.smith@example.com", "Candidate")
         ]
         for username, role in users:
             existing_user = db.query(User).filter(User.username == username).first()
