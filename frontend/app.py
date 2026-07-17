@@ -541,7 +541,7 @@ else:
                                 </p>
                             </div>
                         """, unsafe_allow_html=True)
-                        return
+                        st.stop()
                     
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
                     
