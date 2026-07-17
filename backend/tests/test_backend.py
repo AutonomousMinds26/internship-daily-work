@@ -199,3 +199,87 @@ def test_get_score_calculation(client):
     assert "SQL" in data["details"]["missing_skills"]
     assert "Docker" in data["details"]["missing_skills"]
     assert data["details"]["experience_gap"] == 2
+
+# --- Jobs Retrieve test ---
+def test_get_jobs_list(client):
+    recruiter_token = get_token(client, "recruiter_user")
+    manager_token = get_token(client, "manager_user")
+
+    # Create a job
+    create_res = client.post(
+        "/job",
+        json={
+            "title": "Data Scientist",
+            "description": "ML solutions",
+            "requirements": ["Python", "Pandas"],
+            "experience_required": 2
+        },
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert create_res.status_code == 201
+
+    # Get jobs list as Recruiter
+    get_res = client.get(
+        "/job",
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert get_res.status_code == 200
+    jobs = get_res.json()
+    assert len(jobs) >= 1
+    assert any(j["title"] == "Data Scientist" for j in jobs)
+
+    # Get jobs list as Hiring Manager
+    get_res_manager = client.get(
+        "/job",
+        headers={"Authorization": f"Bearer {manager_token}"}
+    )
+    assert get_res_manager.status_code == 200
+
+# --- Candidate Status Update test ---
+def test_patch_candidate_status(client, mock_redis):
+    recruiter_token = get_token(client, "recruiter_user")
+    manager_token = get_token(client, "manager_user")
+
+    # 1. Upload candidate
+    resume_content = (
+        "Bob Taylor\n"
+        "Email: bob.taylor@example.com\n"
+        "Skills: Python\n"
+        "Experience: 1 year\n"
+    )
+    upload_res = client.post(
+        "/upload_resume",
+        files={"file": ("resume.txt", resume_content.encode("utf-8"))},
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert upload_res.status_code == 201
+    candidate = upload_res.json()
+    assert candidate["status"] == "Applied"
+    candidate_id = candidate["id"]
+
+    # 2. Update status to Shortlisted as Hiring Manager
+    patch_res = client.patch(
+        f"/candidate/{candidate_id}/status",
+        json={"status": "Shortlisted"},
+        headers={"Authorization": f"Bearer {manager_token}"}
+    )
+    assert patch_res.status_code == 200
+    updated_candidate = patch_res.json()
+    assert updated_candidate["status"] == "Shortlisted"
+
+    # 3. Try setting an invalid status
+    patch_invalid = client.patch(
+        f"/candidate/{candidate_id}/status",
+        json={"status": "InvalidStatus"},
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert patch_invalid.status_code == 400
+
+    # 4. Check candidate endpoint returns updated status (and verify from cache)
+    get_res = client.get(
+        f"/candidate?id={candidate_id}",
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] == "Shortlisted"
+

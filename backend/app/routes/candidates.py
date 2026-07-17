@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import Candidate, Job
-from app.schemas import CandidateResponse, ScoreResponse, MatchDetails
+from app.schemas import CandidateResponse, ScoreResponse, MatchDetails, CandidateStatusUpdate
 from app.auth import RoleChecker, get_current_user, User
 from app.services.extractor import extract_candidate_info
 from app.services.redis_cache import get_cached_candidate, cache_candidate, invalidate_candidate
@@ -36,6 +36,7 @@ def serialize_candidate(c: Candidate) -> dict:
         "expected_ctc": c.expected_ctc,
         "location": c.location,
         "resume_text": c.resume_text,
+        "status": c.status,
         "created_at": c.created_at.isoformat() if c.created_at else datetime.utcnow().isoformat()
     }
 
@@ -220,3 +221,41 @@ def get_score(
             experience_gap=gap
         )
     )
+
+@router.patch("/candidate/{candidate_id}/status", response_model=CandidateResponse)
+def update_candidate_status(
+    candidate_id: int,
+    status_in: CandidateStatusUpdate,
+    db: Session = Depends(get_db),
+    _current_user = Depends(any_auth_checker)
+):
+    """
+    Update candidate status. Restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Updating candidate {candidate_id} status to {status_in.status}")
+    valid_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
+    if status_in.status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of {valid_statuses}."
+        )
+    
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        logger.warning(f"Candidate {candidate_id} not found for status update.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with ID {candidate_id} not found."
+        )
+        
+    candidate.status = status_in.status
+    db.commit()
+    db.refresh(candidate)
+    
+    # Invalidate cache and write back
+    invalidate_candidate(candidate.id)
+    cache_candidate(candidate.id, serialize_candidate(candidate))
+    
+    logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
+    return candidate
+
