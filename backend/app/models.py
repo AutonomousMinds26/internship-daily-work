@@ -27,6 +27,7 @@ class Candidate(Base):
     expected_ctc = Column(String, nullable=True)
     location = Column(String, nullable=True)
     resume_text = Column(Text, nullable=True)
+    status = Column(String, default="Applied", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Job(Base):
