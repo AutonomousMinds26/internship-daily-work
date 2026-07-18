@@ -1,59 +1,110 @@
 import os
 import json
 
-from parser import extract_resume_text
-from extractor import extract_candidate_info
-from jd_parser import extract_job_info
-from scorer import calculate_score
+from document_reader import extract_resume_text
+from resume_extractor import extract_candidate_info
+from job_extractor import extract_job_info
+from ai_matcher import ai_match_candidate
 
 
 def rank_candidates(resume_folder, job_file):
 
-    rankings = []
+    results = []
 
+    # -----------------------------
     # Read Job Description
-    with open(job_file, "r", encoding="utf-8") as file:
+    # -----------------------------
+    with open(
+        job_file,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
         job_text = file.read()
 
-    job = extract_job_info(job_text)
+    print("\nExtracting Job Description...\n")
 
-    # Process all resumes
-    for file in os.listdir(resume_folder):
+    job = extract_job_info(
+        job_text
+    )
 
-        if file.lower().endswith(".pdf"):
+    # -----------------------------
+    # Process All Resumes
+    # -----------------------------
+    for filename in os.listdir(resume_folder):
 
-            resume_path = os.path.join(resume_folder, file)
+        if filename.lower().endswith(
+            (".pdf", ".docx")
+        ):
 
-            resume_text = extract_resume_text(resume_path)
+            print(
+                f"Processing: {filename}"
+            )
 
-            candidate = extract_candidate_info(resume_text)
+            path = os.path.join(
+                resume_folder,
+                filename
+            )
 
-            result = calculate_score(candidate, job)
+            # Read Resume
+            resume_text = extract_resume_text(
+                path
+            )
 
-            rankings.append(result)
+            # Extract Candidate Details
+            candidate = extract_candidate_info(
+                resume_text
+            )
 
-    # Sort by highest score
-    rankings.sort(
-        key=lambda x: x["match_percentage"],
+            # AI Matching
+            result = ai_match_candidate(
+                candidate,
+                job
+            )
+
+            results.append(
+                result
+            )
+
+    # -----------------------------
+    # Sort Candidates
+    # -----------------------------
+    results.sort(
+        key=lambda x: x.get(
+            "match_percentage",
+            0
+        ),
         reverse=True
     )
 
-    return rankings
+    return results
 
 
 if __name__ == "__main__":
 
-    ranked = rank_candidates(
+    ranking = rank_candidates(
         "sample_resumes",
-        "backend/AI/sample_job.txt"
+        "sample_job.txt"
     )
 
-    print("\n=========== FINAL RANKING ===========\n")
+    print(
+        "\n========= FINAL RANKING =========\n"
+    )
 
-    for i, candidate in enumerate(ranked, start=1):
+    for index, candidate in enumerate(
+        ranking,
+        start=1
+    ):
 
-        print(f"Rank #{i}")
+        print(
+            f"Rank #{index}"
+        )
 
-        print(json.dumps(candidate, indent=4))
+        print(
+            json.dumps(
+                candidate,
+                indent=4
+            )
+        )
 
-        print("------------------------------------")
+        print("-" * 40)
