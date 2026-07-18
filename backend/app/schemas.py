@@ -61,6 +61,7 @@ class CandidateCreate(BaseModel):
     expected_ctc: Optional[str] = None
     location: Optional[str] = None
     resume_text: Optional[str] = None
+    status: Optional[str] = "Applied"
 
 class CandidateResponse(BaseModel):
     id: int
@@ -75,10 +76,15 @@ class CandidateResponse(BaseModel):
     expected_ctc: Optional[str] = None
     location: Optional[str] = None
     resume_text: Optional[str] = None
+    status: str
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class CandidateStatusUpdate(BaseModel):
+    status: str
+
 
 # --- Score/Match Schemas ---
 class MatchDetails(BaseModel):

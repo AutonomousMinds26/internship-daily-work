@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List, Optional
 import logging
 
 from app.database import get_db
@@ -13,6 +14,8 @@ router = APIRouter(prefix="/job", tags=["jobs"])
 
 # Allowed roles: Recruiter, Admin
 recruiter_admin_checker = RoleChecker(allowed_roles=["Recruiter", "Admin"])
+any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin", "Candidate"])
+
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
@@ -35,3 +38,16 @@ def create_job(
     db.refresh(db_job)
     logger.info(f"Job created successfully with ID: {db_job.id}")
     return db_job
+
+@router.get("", response_model=List[JobResponse])
+def get_jobs(
+    db: Session = Depends(get_db),
+    _current_user = Depends(any_auth_checker)
+):
+    """
+    Get all jobs. Access permitted for Recruiters, Hiring Managers, and Admins.
+    """
+    logger.info("Retrieving all jobs from DB.")
+    jobs = db.query(Job).all()
+    return jobs
+

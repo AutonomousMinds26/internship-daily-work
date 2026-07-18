@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import Candidate, Job
-from app.schemas import CandidateResponse, ScoreResponse, MatchDetails
+from app.schemas import CandidateResponse, ScoreResponse, MatchDetails, CandidateStatusUpdate
 from app.auth import RoleChecker, get_current_user, User
 from app.services.extractor import extract_candidate_info
 from app.services.redis_cache import get_cached_candidate, cache_candidate, invalidate_candidate
@@ -19,7 +19,8 @@ router = APIRouter(tags=["candidates"])
 
 # Endpoints authorization checkers
 recruiter_admin_checker = RoleChecker(allowed_roles=["Recruiter", "Admin"])
-any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
+any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin", "Candidate"])
+status_update_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
 
 def serialize_candidate(c: Candidate) -> dict:
     """Helper to convert Candidate model to dict for Redis caching."""
@@ -36,6 +37,7 @@ def serialize_candidate(c: Candidate) -> dict:
         "expected_ctc": c.expected_ctc,
         "location": c.location,
         "resume_text": c.resume_text,
+        "status": c.status,
         "created_at": c.created_at.isoformat() if c.created_at else datetime.utcnow().isoformat()
     }
 
@@ -137,8 +139,41 @@ def get_candidate(
 ):
     """
     Get all candidates or retrieve a single candidate (uses cache-aside strategy).
-    Access permitted for Recruiters, Hiring Managers, and Admins.
+    Access permitted for Recruiters, Hiring Managers, Admins, and Candidates (restricted to self).
     """
+    if _current_user.role == "Candidate":
+        if id is not None:
+            # Check if this candidate ID matches current user's email
+            cached_cand = get_cached_candidate(id)
+            if cached_cand:
+                if cached_cand["email"] != _current_user.username:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied to other candidates' profiles."
+                    )
+                return cached_cand
+            
+            candidate = db.query(Candidate).filter(Candidate.id == id).first()
+            if not candidate:
+                logger.warning(f"Candidate {id} not found in DB.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Candidate with ID {id} not found."
+                )
+            if candidate.email != _current_user.username:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to other candidates' profiles."
+                )
+            cand_dict = serialize_candidate(candidate)
+            cache_candidate(id, cand_dict)
+            return candidate
+        else:
+            # Candidate gets only their own profile
+            logger.info(f"Candidate {_current_user.username} retrieving their own profile.")
+            candidate = db.query(Candidate).filter(Candidate.email == _current_user.username).first()
+            return [candidate] if candidate else []
+
     if id is not None:
         # Cache-aside lookup
         cached_cand = get_cached_candidate(id)
@@ -173,7 +208,7 @@ def get_score(
 ):
     """
     Calculate and retrieve candidate compatibility score against a job.
-    Access permitted for Recruiters, Hiring Managers, and Admins.
+    Access permitted for Recruiters, Hiring Managers, Admins, and Candidates (restricted to self).
     """
     logger.info(f"Calculating match score: Candidate {candidate_id} vs Job {job_id}")
     
@@ -183,6 +218,7 @@ def get_score(
         # Recreate list objects/experience from cache
         cand_skills = candidate_data["skills"]
         cand_exp = candidate_data["experience"]
+        cand_email = candidate_data["email"]
     else:
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if not candidate:
@@ -192,8 +228,16 @@ def get_score(
             )
         cand_skills = candidate.skills
         cand_exp = candidate.experience
+        cand_email = candidate.email
         # Cache candidate for future use
         cache_candidate(candidate_id, serialize_candidate(candidate))
+
+    # Candidate security check
+    if _current_user.role == "Candidate" and cand_email != _current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to other candidates' scores."
+        )
 
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -220,3 +264,41 @@ def get_score(
             experience_gap=gap
         )
     )
+
+@router.patch("/candidate/{candidate_id}/status", response_model=CandidateResponse)
+def update_candidate_status(
+    candidate_id: int,
+    status_in: CandidateStatusUpdate,
+    db: Session = Depends(get_db),
+    _current_user = Depends(status_update_checker)
+):
+    """
+    Update candidate status. Restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Updating candidate {candidate_id} status to {status_in.status}")
+    valid_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
+    if status_in.status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of {valid_statuses}."
+        )
+    
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        logger.warning(f"Candidate {candidate_id} not found for status update.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with ID {candidate_id} not found."
+        )
+        
+    candidate.status = status_in.status
+    db.commit()
+    db.refresh(candidate)
+    
+    # Invalidate cache and write back
+    invalidate_candidate(candidate.id)
+    cache_candidate(candidate.id, serialize_candidate(candidate))
+    
+    logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
+    return candidate
+
