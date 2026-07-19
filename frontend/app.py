@@ -261,6 +261,8 @@ def login_ui():
                             st.session_state.role = "Admin"
                         elif "manager" in username.lower():
                             st.session_state.role = "Hiring Manager"
+                        elif "candidate" in username.lower() or "@" in username:
+                            st.session_state.role = "Candidate"
                         else:
                             st.session_state.role = "Recruiter"
                         
@@ -1021,3 +1023,162 @@ else:
                     st.success(f"Successfully seeded **{success_count}** jobs requirements!")
                 else:
                     st.error("Failed to seed jobs. Check backend connection.")
+
+    # CANDIDATE PROFILE & STATUS PAGE
+    elif choice == "My Profile & Status":
+        st.title("👤 My Candidate Portal")
+        st.markdown("---")
+        
+        # Load Candidate record
+        cand_res = api_request("GET", "/candidate")
+        if cand_res is not None and cand_res.status_code == 200:
+            candidates = cand_res.json()
+            if not candidates:
+                st.warning("⚠️ Profile Not Found: No resume details matching your account have been uploaded yet. Please upload your resume or contact a Recruiter.")
+                
+                # Let Candidate upload their own resume if it doesn't exist
+                st.subheader("📤 Upload Your Resume")
+                uploaded_file = st.file_uploader("Select resume file (PDF or TXT)", type=["pdf", "txt"])
+                if uploaded_file is not None:
+                    st.info(f"Selected file: **{uploaded_file.name}**")
+                    if st.button("Extract and Save Resume", use_container_width=True):
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
+                        with st.spinner("Processing your resume..."):
+                            res = api_request("POST", "/upload_resume", files=files)
+                            if res and res.status_code == 201:
+                                st.success("🎉 Resume uploaded successfully! Rerunning...")
+                                time.sleep(0.5)
+                                st.rerun()
+                            elif res:
+                                st.error(f"Upload failed: {res.json().get('detail', 'Unknown error')}")
+            else:
+                candidate = candidates[0]
+                
+                # Visual Application Status Step Tracker
+                st.subheader("🎯 Application Status")
+                status = candidate.get("status", "Applied")
+                status_steps = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
+                
+                try:
+                    current_idx = status_steps.index(status)
+                except ValueError:
+                    current_idx = 0
+                
+                # Render visual progress bar
+                cols = st.columns(len(status_steps))
+                for idx, step in enumerate(status_steps):
+                    with cols[idx]:
+                        if idx < current_idx:
+                            st.markdown(f"<div style='text-align: center; color: #10B981; font-weight: bold;'>✅ {step}</div>", unsafe_allow_html=True)
+                        elif idx == current_idx:
+                            st.markdown(f"<div style='text-align: center; color: #3B82F6; font-weight: bold; border: 2px solid #3B82F6; border-radius: 8px; padding: 4px;'>🔵 {step}</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div style='text-align: center; color: #6B7280;'>⚪ {step}</div>", unsafe_allow_html=True)
+                
+                st.progress((current_idx + 1) / len(status_steps))
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    with st.container(border=True):
+                        st.subheader("📝 Profile Details")
+                        st.write(f"**Name:** {candidate['name']}")
+                        st.write(f"**Email:** {candidate['email']}")
+                        st.write(f"**Phone:** {candidate['phone'] or 'N/A'}")
+                        st.write(f"**Location:** {candidate['location'] or 'N/A'}")
+                        st.write(f"**Experience:** {candidate['experience']} years")
+                        st.write(f"**Education:** {candidate['education']}")
+                        st.write(f"**Notice Period:** {candidate['notice_period'] or 'N/A'}")
+                        st.write(f"**Expected CTC:** {candidate['expected_ctc'] or 'N/A'}")
+                        st.markdown("**Skills:**")
+                        st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in candidate['skills']]) if candidate['skills'] else 'None', unsafe_allow_html=True)
+                
+                with col_c2:
+                    with st.container(border=True):
+                        st.subheader("📊 Compatibility Scoring")
+                        job_res = api_request("GET", "/job")
+                        if job_res is not None and job_res.status_code == 200:
+                            jobs = job_res.json()
+                            if not jobs:
+                                st.info("No open job requirements available at the moment.")
+                            else:
+                                job_opts = {j['title']: j['id'] for j in jobs}
+                                selected_job_title = st.selectbox("Select Job Target", list(job_opts.keys()), key="candidate_job_target")
+                                job_id = job_opts[selected_job_title]
+                                
+                                if st.button("Check My Compatibility", use_container_width=True):
+                                    score_res = api_request("GET", f"/score?candidate_id={candidate['id']}&job_id={job_id}")
+                                    if score_res and score_res.status_code == 200:
+                                        score_data = score_res.json()
+                                        match_score = score_data["match_score"]
+                                        details = score_data["details"]
+                                        
+                                        # Gauge chart
+                                        fig_gauge = go.Figure(go.Indicator(
+                                            mode = "gauge+number",
+                                            value = match_score,
+                                            domain = {'x': [0, 1], 'y': [0, 1]},
+                                            gauge = {
+                                                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                                                'bar': {'color': "#4F46E5"},
+                                                'bgcolor': "rgba(0,0,0,0)",
+                                                'borderwidth': 2,
+                                                'bordercolor': "gray",
+                                                'steps': [
+                                                    {'range': [0, 40], 'color': 'rgba(239, 68, 68, 0.15)'},
+                                                    {'range': [40, 70], 'color': 'rgba(245, 158, 11, 0.15)'},
+                                                    {'range': [70, 100], 'color': 'rgba(16, 185, 129, 0.15)'}
+                                                ]
+                                            }
+                                        ))
+                                        fig_gauge.update_layout(
+                                            paper_bgcolor="rgba(0,0,0,0)", 
+                                            font_color="#E5E7EB", 
+                                            height=160, 
+                                            margin=dict(l=10, r=10, t=10, b=10)
+                                        )
+                                        st.plotly_chart(fig_gauge, use_container_width=True)
+                                        
+                                        # Matched / Missing skills listing
+                                        col_s1, col_s2 = st.columns(2)
+                                        with col_s1:
+                                            st.markdown("✅ **Matched Skills**")
+                                            if details["matched_skills"]:
+                                                st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in details["matched_skills"]]), unsafe_allow_html=True)
+                                            else:
+                                                st.caption("None matched")
+                                        with col_s2:
+                                            st.markdown("❌ **Missing Skills**")
+                                            if details["missing_skills"]:
+                                                st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in details["missing_skills"]]), unsafe_allow_html=True)
+                                            else:
+                                                st.caption("None missing")
+                                                
+                                        # Experience gap info
+                                        gap = details["experience_gap"]
+                                        if gap > 0:
+                                            st.warning(f"⚠️ You lack **{gap} years** of experience for this role.")
+                                        else:
+                                            st.success("✅ You meet the experience requirement!")
+                                    elif score_res:
+                                        st.error("Failed to check compatibility score.")
+
+    # AVAILABLE JOBS PAGE
+    elif choice == "Available Jobs":
+        st.title("💼 Open Job Opportunities")
+        st.markdown("---")
+        
+        job_res = api_request("GET", "/job")
+        if job_res is not None and job_res.status_code == 200:
+            jobs = job_res.json()
+            if not jobs:
+                st.info("No open job opportunities at the moment. Check back later!")
+            else:
+                for j in jobs:
+                    with st.container(border=True):
+                        st.subheader(j['title'])
+                        st.write(f"**Experience Required:** {j['experience_required']} years")
+                        st.write(f"**Description:** {j['description']}")
+                        st.markdown("**Key Requirements:**")
+                        st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in j['requirements']]) if j['requirements'] else 'None', unsafe_allow_html=True)
