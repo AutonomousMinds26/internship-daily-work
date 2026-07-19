@@ -98,6 +98,81 @@ st.markdown("""
             color: #EF4444;
             margin-bottom: 8px;
         }
+
+        /* Ranking table row */
+        .rank-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 10px;
+            transition: all 0.25s ease;
+        }
+        .rank-row:hover {
+            background: rgba(79, 70, 229, 0.08);
+            border-color: rgba(79, 70, 229, 0.3);
+            transform: translateX(4px);
+        }
+        .rank-number {
+            font-size: 22px;
+            font-weight: 700;
+            color: #6366F1;
+            min-width: 32px;
+        }
+        .rank-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #E5E7EB;
+            flex: 1;
+        }
+        .rank-score {
+            font-size: 20px;
+            font-weight: 700;
+        }
+        .badge-shortlisted {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #34D399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 4px 14px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .badge-maybe {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #FCD34D;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            padding: 4px 14px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .badge-reject {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #F87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            padding: 4px 14px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .detail-panel {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-radius: 14px;
+            padding: 24px;
+            margin-top: 8px;
+        }
+        .job-selector-box {
+            background: rgba(79, 70, 229, 0.08);
+            border: 1px solid rgba(79, 70, 229, 0.25);
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -208,7 +283,7 @@ else:
     st.sidebar.info(f"Role: **{st.session_state.role}**")
     
     # Navigation list depending on role
-    nav_options = ["Dashboard", "Candidates List", "Upload Resume"]
+    nav_options = ["Dashboard", "AI Ranking", "Candidates List", "Upload Resume"]
     if st.session_state.role == "Admin":
         nav_options.append("Admin Settings")
         
@@ -507,6 +582,233 @@ else:
                                     st.markdown("### Raw Resume Text")
                                     st.text_area("Full Extracted text", value=row['resume_text'], height=200, disabled=True, key=f"raw_cv_{row['id']}")
 
+    # AI RANKING PAGE
+    elif choice == "AI Ranking":
+        st.title("🏆 AI Candidate Ranking")
+        st.markdown("Automatically rank all candidates against a selected job role using AI match scores.")
+        st.markdown("---")
+
+        job_res = api_request("GET", "/job")
+        cand_res = api_request("GET", "/candidate")
+
+        if job_res is None or cand_res is None:
+            st.stop()
+
+        if job_res.status_code != 200 or cand_res.status_code != 200:
+            st.error("Failed to load data from backend.")
+            st.stop()
+
+        jobs = job_res.json()
+        candidates = cand_res.json()
+
+        if not jobs:
+            st.warning("⚠️ No job roles found. Please create or seed jobs first (Admin Settings → Seed Default Jobs).")
+            st.stop()
+
+        if not candidates:
+            st.info("No candidates uploaded yet. Head to **Upload Resume** to get started.")
+            st.stop()
+
+        # ── Job Role Selector ──────────────────────────────────────────────
+        st.markdown('<div class="job-selector-box">', unsafe_allow_html=True)
+        col_js1, col_js2 = st.columns([2, 1])
+        with col_js1:
+            st.markdown("### 🎯 Select Job Role")
+            job_opts = {j["title"]: j["id"] for j in jobs}
+            selected_job_title = st.selectbox(
+                "Choose the job to rank candidates against:",
+                list(job_opts.keys()),
+                key="ranking_job_select"
+            )
+            job_id = job_opts[selected_job_title]
+        with col_js2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            selected_job_obj = next((j for j in jobs if j["id"] == job_id), None)
+            if selected_job_obj:
+                st.caption(f"**Required Experience:** {selected_job_obj.get('experience_required', 'N/A')} years")
+                reqs = selected_job_obj.get('requirements', [])
+                if reqs:
+                    st.caption("**Required Skills:**")
+                    st.markdown(" ".join([f'<span class="badge badge-skill">{r}</span>' for r in reqs]), unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Rank All Candidates ────────────────────────────────────────────
+        if st.button("🚀 Rank All Candidates", use_container_width=True, type="primary"):
+            st.session_state["ranking_results"] = None
+            ranked = []
+            progress = st.progress(0, text="Scoring candidates...")
+            for i, cand in enumerate(candidates):
+                score_res = api_request("GET", f"/score?candidate_id={cand['id']}&job_id={job_id}")
+                if score_res and score_res.status_code == 200:
+                    sd = score_res.json()
+                    ranked.append({
+                        "candidate": cand,
+                        "match_score": sd["match_score"],
+                        "details": sd["details"]
+                    })
+                else:
+                    ranked.append({
+                        "candidate": cand,
+                        "match_score": 0,
+                        "details": {"matched_skills": [], "missing_skills": [], "experience_gap": 0}
+                    })
+                progress.progress((i + 1) / len(candidates), text=f"Scored {i+1}/{len(candidates)} candidates")
+            progress.empty()
+            ranked.sort(key=lambda x: x["match_score"], reverse=True)
+            st.session_state["ranking_results"] = ranked
+            st.session_state["ranking_job_title"] = selected_job_title
+
+        # ── Display Rankings ───────────────────────────────────────────────
+        if st.session_state.get("ranking_results"):
+            ranked = st.session_state["ranking_results"]
+            job_title_display = st.session_state.get("ranking_job_title", selected_job_title)
+
+            st.markdown(f"### 📋 Rankings for: **{job_title_display}**")
+
+            def get_recommendation(score):
+                if score >= 70:
+                    return "Shortlisted", "badge-shortlisted", "✅"
+                elif score >= 40:
+                    return "Maybe", "badge-maybe", "🤔"
+                else:
+                    return "Reject", "badge-reject", "❌"
+
+            def score_color(score):
+                if score >= 70:
+                    return "#34D399"
+                elif score >= 40:
+                    return "#FCD34D"
+                else:
+                    return "#F87171"
+
+            # Summary stats row
+            shortlisted_count = sum(1 for r in ranked if r["match_score"] >= 70)
+            maybe_count = sum(1 for r in ranked if 40 <= r["match_score"] < 70)
+            reject_count = sum(1 for r in ranked if r["match_score"] < 40)
+
+            stat_c1, stat_c2, stat_c3, stat_c4 = st.columns(4)
+            with stat_c1:
+                st.markdown(f'<div class="metric-card"><div class="metric-title">👥 Total Ranked</div><div class="metric-value">{len(ranked)}</div></div>', unsafe_allow_html=True)
+            with stat_c2:
+                st.markdown(f'<div class="metric-card"><div class="metric-title">✅ Shortlisted</div><div class="metric-value" style="color:#34D399">{shortlisted_count}</div></div>', unsafe_allow_html=True)
+            with stat_c3:
+                st.markdown(f'<div class="metric-card"><div class="metric-title">🤔 Maybe</div><div class="metric-value" style="color:#FCD34D">{maybe_count}</div></div>', unsafe_allow_html=True)
+            with stat_c4:
+                st.markdown(f'<div class="metric-card"><div class="metric-title">❌ Reject</div><div class="metric-value" style="color:#F87171">{reject_count}</div></div>', unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Table header
+            hdr1, hdr2, hdr3, hdr4 = st.columns([0.5, 3, 2, 2])
+            hdr1.markdown("**#**")
+            hdr2.markdown("**Candidate**")
+            hdr3.markdown("**Match %**")
+            hdr4.markdown("**Recommendation**")
+            st.markdown("<hr style='margin: 4px 0 12px 0; border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+
+            for rank_idx, entry in enumerate(ranked):
+                cand = entry["candidate"]
+                score = entry["match_score"]
+                details = entry["details"]
+                rec_label, rec_class, rec_icon = get_recommendation(score)
+                color = score_color(score)
+
+                row_c1, row_c2, row_c3, row_c4 = st.columns([0.5, 3, 2, 2])
+                with row_c1:
+                    st.markdown(f"<div style='padding-top:8px; font-size:18px; font-weight:700; color:#6366F1;'>#{rank_idx+1}</div>", unsafe_allow_html=True)
+                with row_c2:
+                    st.markdown(f"<div style='padding-top:8px; font-size:15px; font-weight:600; color:#E5E7EB;'>👤 {cand['name']}</div>", unsafe_allow_html=True)
+                with row_c3:
+                    st.markdown(f"<div style='padding-top:8px; font-size:18px; font-weight:700; color:{color};'>{score}%</div>", unsafe_allow_html=True)
+                with row_c4:
+                    st.markdown(f"<div style='padding-top:6px;'><span class='{rec_class}'>{rec_icon} {rec_label}</span></div>", unsafe_allow_html=True)
+
+                # Expandable detail panel
+                with st.expander(f"View details for {cand['name']}", expanded=False):
+                    st.markdown('<div class="detail-panel">', unsafe_allow_html=True)
+
+                    d_col1, d_col2 = st.columns([1.3, 1])
+
+                    with d_col1:
+                        st.markdown(f"## 👤 {cand['name']}")
+                        st.markdown(f"📧 **Email:** {cand['email']}")
+                        if cand.get('phone'):
+                            st.markdown(f"📞 **Phone:** {cand['phone']}")
+                        if cand.get('location'):
+                            st.markdown(f"📍 **Location:** {cand['location']}")
+                        st.markdown(f"⏳ **Experience:** {cand['experience']} years")
+
+                        st.markdown("---")
+                        st.markdown("#### 🛠️ Skills")
+                        if cand.get('skills'):
+                            st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in cand['skills']]), unsafe_allow_html=True)
+                        else:
+                            st.caption("No skills extracted.")
+
+                    with d_col2:
+                        # Match gauge
+                        fig_gauge = go.Figure(go.Indicator(
+                            mode="gauge+number",
+                            value=score,
+                            domain={'x': [0, 1], 'y': [0, 1]},
+                            title={'text': "Match Score", 'font': {'size': 16}},
+                            gauge={
+                                'axis': {'range': [0, 100]},
+                                'bar': {'color': color},
+                                'bgcolor': "rgba(0,0,0,0)",
+                                'steps': [
+                                    {'range': [0, 40], 'color': 'rgba(239,68,68,0.1)'},
+                                    {'range': [40, 70], 'color': 'rgba(245,158,11,0.1)'},
+                                    {'range': [70, 100], 'color': 'rgba(16,185,129,0.1)'}
+                                ]
+                            }
+                        ))
+                        fig_gauge.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font_color="#E5E7EB",
+                            height=180,
+                            margin=dict(l=10, r=10, t=40, b=10)
+                        )
+                        st.plotly_chart(fig_gauge, use_container_width=True)
+
+                    st.markdown("---")
+                    str_col, weak_col, rec_col = st.columns(3)
+
+                    with str_col:
+                        st.markdown("#### 💪 Strengths")
+                        matched = details.get('matched_skills', [])
+                        if matched:
+                            for sk in matched:
+                                st.markdown(f'<span class="badge badge-matched">✅ {sk}</span>', unsafe_allow_html=True)
+                        else:
+                            st.caption("No matching skills found.")
+
+                    with weak_col:
+                        st.markdown("#### ⚠️ Weaknesses")
+                        missing = details.get('missing_skills', [])
+                        if missing:
+                            for sk in missing:
+                                st.markdown(f'<span class="badge badge-missing">❌ {sk}</span>', unsafe_allow_html=True)
+                        else:
+                            st.caption("All required skills matched! 🎉")
+                        gap = details.get('experience_gap', 0)
+                        if gap and gap > 0:
+                            st.markdown(f'<span class="badge badge-missing">⏳ {gap} yrs experience gap</span>', unsafe_allow_html=True)
+
+                    with rec_col:
+                        st.markdown("#### 🏷️ Recommendation")
+                        st.markdown(f'<span class="{rec_class}" style="font-size:15px; padding: 8px 18px;">{rec_icon} {rec_label}</span>', unsafe_allow_html=True)
+                        if rec_label == "Shortlisted":
+                            st.success("Strong match — recommend proceeding to interview.")
+                        elif rec_label == "Maybe":
+                            st.warning("Partial match — review manually before deciding.")
+                        else:
+                            st.error("Low match — does not meet key requirements.")
+
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                st.markdown("<hr style='margin: 4px 0; border-color: rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
+
     # UPLOAD RESUME PAGE
     elif choice == "Upload Resume":
         st.title("📤 Resume Intelligence Uploader")
@@ -516,6 +818,28 @@ else:
         if st.session_state.role not in ["Recruiter", "Admin"]:
             st.warning("⛔ Access Restricted: Only Recruiters and Admins can upload resumes.")
         else:
+            # ── Job Role Selection ─────────────────────────────────────────
+            job_res_up = api_request("GET", "/job")
+            jobs_for_upload = []
+            if job_res_up and job_res_up.status_code == 200:
+                jobs_for_upload = job_res_up.json()
+
+            st.markdown('<div class="job-selector-box">', unsafe_allow_html=True)
+            st.markdown("### 🎯 Select Job Role")
+            if not jobs_for_upload:
+                st.warning("No job roles available. Ask an Admin to seed jobs first.")
+                selected_upload_job = None
+            else:
+                upload_job_opts = {j["title"]: j["id"] for j in jobs_for_upload}
+                selected_upload_job_title = st.selectbox(
+                    "Which job are you hiring for?",
+                    list(upload_job_opts.keys()),
+                    key="upload_job_select"
+                )
+                selected_upload_job = upload_job_opts[selected_upload_job_title]
+                st.caption(f"📌 Resumes will be matched against: **{selected_upload_job_title}**")
+            st.markdown('</div>', unsafe_allow_html=True)
+
             st.markdown("""
                 Upload resumes in **PDF** or **TXT** formats. The backend will automatically extract:
                 - Basic profiles (Name, Email, Phone, Location)
@@ -523,7 +847,7 @@ else:
                 - Notice period and compensation expectations
             """)
             
-            uploaded_file = st.file_uploader("Select resume file", type=["pdf", "txt"])
+            uploaded_file = st.file_uploader("Choose Files", type=["pdf", "txt"])
             
             if uploaded_file is not None:
                 st.info(f"Selected file: **{uploaded_file.name}**")
@@ -571,6 +895,33 @@ else:
                                         
                                     st.markdown("**Extracted Skills:**")
                                     st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in candidate['skills']]) if candidate['skills'] else 'None', unsafe_allow_html=True)
+
+                                # Auto-score against selected job if one is chosen
+                                if selected_upload_job:
+                                    st.markdown("---")
+                                    with st.spinner("Calculating AI match score against selected job..."):
+                                        auto_score_res = api_request("GET", f"/score?candidate_id={candidate['id']}&job_id={selected_upload_job}")
+                                        if auto_score_res and auto_score_res.status_code == 200:
+                                            auto_sd = auto_score_res.json()
+                                            auto_score = auto_sd["match_score"]
+                                            auto_details = auto_sd["details"]
+
+                                            if auto_score >= 70:
+                                                rec = "✅ Shortlisted"
+                                                rec_fn = st.success
+                                            elif auto_score >= 40:
+                                                rec = "🤔 Maybe"
+                                                rec_fn = st.warning
+                                            else:
+                                                rec = "❌ Reject"
+                                                rec_fn = st.error
+
+                                            st.subheader(f"🤖 AI Match Score vs. {selected_upload_job_title}")
+                                            sc1, sc2, sc3 = st.columns(3)
+                                            sc1.metric("Match Score", f"{auto_score}%")
+                                            sc2.metric("Matched Skills", len(auto_details.get('matched_skills', [])))
+                                            sc3.metric("Missing Skills", len(auto_details.get('missing_skills', [])))
+                                            rec_fn(f"**Recommendation:** {rec}")
                             
                             # Invalid Resume parsing error (HTTP 400)
                             elif res.status_code == 400:
