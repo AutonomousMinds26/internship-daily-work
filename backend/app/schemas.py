@@ -97,3 +97,23 @@ class ScoreResponse(BaseModel):
     job_id: int
     match_score: float
     details: MatchDetails
+
+class UploadResumeResponse(BaseModel):
+    candidate: str
+    email: str
+    match_percentage: int
+    matched_skills: List[str]
+    missing_skills: List[str]
+    strengths: List[str] = []
+    weaknesses: List[str] = []
+    recommendation: str
+    id: Optional[int] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    experience: Optional[int] = 0
+    skills: Optional[List[str]] = []
+    location: Optional[str] = None
+    notice_period: Optional[str] = None
+    expected_ctc: Optional[str] = None
+    status: Optional[str] = None
+

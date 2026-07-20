@@ -520,61 +520,98 @@ else:
         if st.session_state.role not in ["Recruiter", "Admin"]:
             st.warning("⛔ Access Restricted: Only Recruiters and Admins can upload resumes.")
         else:
-            st.markdown("""
-                Upload resumes in **PDF** or **TXT** formats. The backend will automatically extract:
-                - Basic profiles (Name, Email, Phone, Location)
-                - Technical skills and educational details
-                - Notice period and compensation expectations
-            """)
+            # Load jobs to choose target job role
+            job_res = api_request("GET", "/job")
+            jobs = []
+            if job_res is not None and job_res.status_code == 200:
+                jobs = job_res.json()
             
-            uploaded_file = st.file_uploader("Select resume file", type=["pdf", "txt"])
-            
-            if uploaded_file is not None:
-                st.info(f"Selected file: **{uploaded_file.name}**")
+            if not jobs:
+                st.warning("⚠️ No Job Roles Available: Please create a Job Role first before uploading resumes.")
+            else:
+                st.markdown("""
+                    Upload resumes in **PDF** or **TXT** formats. The backend will automatically extract candidate details and match them against the selected Job Role.
+                """)
                 
-                # Trigger button
-                if st.button("Extract and Save Resume", use_container_width=True):
-                    # Frontend validation: Invalid Resume type check
-                    filename = uploaded_file.name.lower()
-                    if not (filename.endswith(".pdf") or filename.endswith(".txt")):
-                        st.markdown("""
-                            <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px;">
-                                <div class="error-header">❌ Invalid Resume format</div>
-                                <p style="margin: 0; color: #F87171; font-size: 14px;">
-                                    The selected file format is not supported. Please upload a valid document in <b>PDF</b> or <b>TXT</b> format.
-                                </p>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        st.stop()
+                # Job Selection
+                job_options = {j['title']: j['id'] for j in jobs}
+                selected_job_title = st.selectbox("Select Target Job Role", list(job_options.keys()))
+                job_id = job_options[selected_job_title]
+                
+                uploaded_file = st.file_uploader("Select resume file", type=["pdf", "txt"])
+                
+                if uploaded_file is not None:
+                    st.info(f"Selected file: **{uploaded_file.name}**")
                     
-                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
-                    
-                    with st.spinner("Processing resume, performing entity extraction..."):
-                        # Send to backend
-                        res = api_request("POST", "/upload_resume", files=files)
+                    # Trigger button
+                    if st.button("Extract and Match Resume", use_container_width=True):
+                        # Frontend validation: Invalid Resume type check
+                        filename = uploaded_file.name.lower()
+                        if not (filename.endswith(".pdf") or filename.endswith(".txt")):
+                            st.markdown("""
+                                <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px;">
+                                    <div class="error-header">❌ Invalid Resume format</div>
+                                    <p style="margin: 0; color: #F87171; font-size: 14px;">
+                                        The selected file format is not supported. Please upload a valid document in <b>PDF</b> or <b>TXT</b> format.
+                                    </p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            st.stop()
                         
-                        if res is not None:
-                            if res.status_code == 201:
-                                candidate = res.json()
-                                st.success("🎉 Resume Uploaded and Processed Successfully!")
-                                
-                                # Preview profile
-                                with st.container(border=True):
-                                    st.subheader(f"👤 Candidate Extracted Profile: {candidate['name']}")
-                                    col_p1, col_p2 = st.columns(2)
-                                    with col_p1:
-                                        st.write(f"**Email:** {candidate['email']}")
-                                        st.write(f"**Phone:** {candidate['phone'] or 'N/A'}")
-                                        st.write(f"**Location:** {candidate['location'] or 'N/A'}")
-                                        st.write(f"**Experience:** {candidate['experience']} years")
-                                    with col_p2:
-                                        st.write(f"**Education:** {candidate['education']}")
-                                        st.write(f"**Notice Period:** {candidate['notice_period'] or 'N/A'}")
-                                        st.write(f"**Expected CTC:** {candidate['expected_ctc'] or 'N/A'}")
-                                        st.write(f"**Initial Status:** :blue[{candidate['status']}]")
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
+                        
+                        with st.spinner("Processing resume & running AI Matcher..."):
+                            # Send to backend
+                            res = api_request("POST", f"/upload_resume?job_id={job_id}", files=files)
+                            
+                            if res is not None:
+                                if res.status_code == 201:
+                                    match_result = res.json()
+                                    st.success("🎉 Resume Uploaded and Matched Successfully!")
+                                    
+                                    # Preview profile match
+                                    with st.container(border=True):
+                                        st.subheader(f"👤 Candidate: {match_result['candidate']}")
+                                        st.write(f"**Email:** {match_result['email']}")
                                         
-                                    st.markdown("**Extracted Skills:**")
-                                    st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in candidate['skills']]) if candidate['skills'] else 'None', unsafe_allow_html=True)
+                                        rec_val = match_result['recommendation']
+                                        rec_color = "green" if "shortlist" in rec_val.lower() else "orange"
+                                        st.write(f"**AI Recommendation:** :{rec_color}[{rec_val}]")
+                                        
+                                        match_pct = match_result['match_percentage']
+                                        st.markdown(f"**AI Match Compatibility: {match_pct}%**")
+                                        st.progress(match_pct / 100.0)
+                                        
+                                        col_skills1, col_skills2 = st.columns(2)
+                                        with col_skills1:
+                                            st.markdown("✅ **Matched Skills**")
+                                            if match_result["matched_skills"]:
+                                                st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in match_result["matched_skills"]]), unsafe_allow_html=True)
+                                            else:
+                                                st.caption("None matched")
+                                        with col_skills2:
+                                            st.markdown("❌ **Missing Skills**")
+                                            if match_result["missing_skills"]:
+                                                st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in match_result["missing_skills"]]), unsafe_allow_html=True)
+                                            else:
+                                                st.caption("None missing")
+                                                
+                                        st.markdown("---")
+                                        col_sw1, col_sw2 = st.columns(2)
+                                        with col_sw1:
+                                            st.markdown("💪 **AI Identified Strengths**")
+                                            if match_result.get("strengths"):
+                                                for s in match_result["strengths"]:
+                                                    st.markdown(f"- {s}")
+                                            else:
+                                                st.caption("No strengths highlighted")
+                                        with col_sw2:
+                                            st.markdown("⚠️ **AI Identified Weaknesses / Gaps**")
+                                            if match_result.get("weaknesses"):
+                                                for w in match_result["weaknesses"]:
+                                                    st.markdown(f"- {w}")
+                                            else:
+                                                st.caption("No weaknesses highlighted")
                             
                             # Invalid Resume parsing error (HTTP 400)
                             elif res.status_code == 400:
