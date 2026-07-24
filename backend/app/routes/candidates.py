@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, cast, Any
 import fitz  # PyMuPDF
 import logging
 from datetime import datetime, timezone
@@ -91,8 +91,8 @@ def create_candidate(
     db.refresh(db_candidate)
 
     # Invalidate & cache
-    cache_candidate(int(db_candidate.id), serialize_candidate(db_candidate))
-    log_candidate_history(db, int(db_candidate.id), "Candidate Created", f"Candidate {db_candidate.name} created manually", str(current_user.username))
+    cache_candidate(cast(int, db_candidate.id), serialize_candidate(db_candidate))
+    log_candidate_history(db, cast(int, db_candidate.id), "Candidate Created", f"Candidate {db_candidate.name} created manually", str(current_user.username))
 
     logger.info(f"Candidate created with ID: {db_candidate.id}")
     return db_candidate
@@ -239,9 +239,9 @@ def update_candidate(
     db.commit()
     db.refresh(candidate)
 
-    invalidate_candidate(int(candidate.id))
-    cache_candidate(int(candidate.id), serialize_candidate(candidate))
-    log_candidate_history(db, int(candidate.id), "Candidate Updated", f"Updated fields: {list(update_data.keys())}", str(current_user.username))
+    invalidate_candidate(cast(int, candidate.id))
+    cache_candidate(cast(int, candidate.id), serialize_candidate(candidate))
+    log_candidate_history(db, cast(int, candidate.id), "Candidate Updated", f"Updated fields: {list(update_data.keys())}", str(current_user.username))
 
     logger.info(f"Candidate {candidate_id} updated successfully.")
     return candidate
@@ -298,7 +298,7 @@ async def upload_resume(
             db.add(job)
             db.commit()
             db.refresh(job)
-        job_id = int(job.id)
+        job_id = cast(int, job.id)
     else:
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
@@ -417,7 +417,7 @@ async def upload_resume(
     # 5. Extract Job Info
     job_info = None
     if ai_extract_job is not None:
-        req_skills = list(job.requirements or [])
+        req_skills = cast(list, job.requirements or [])
         job_text = f"Job Title: {job.title}\nJob Description: {job.description}\nRequired Skills: {', '.join(req_skills)}\nRequired Experience: {job.experience_required} years"
         try:
             job_info = ai_extract_job(job_text)
@@ -545,10 +545,10 @@ async def upload_resume(
     db.commit()
 
     # Invalidate cache if it existed, and cache the new data
-    invalidate_candidate(int(candidate_db.id))
+    invalidate_candidate(cast(int, candidate_db.id))
     cand_dict = serialize_candidate(candidate_db)
-    cache_candidate(int(candidate_db.id), cand_dict)
-    log_candidate_history(db, int(candidate_db.id), "Resume Uploaded & Parsed", f"Uploaded file {file.filename} for job {job.title}", str(_current_user.username))
+    cache_candidate(cast(int, candidate_db.id), cand_dict)
+    log_candidate_history(db, cast(int, candidate_db.id), "Resume Uploaded & Parsed", f"Uploaded file {file.filename} for job {job.title}", str(_current_user.username))
 
     logger.info(f"Resume processed and matched successfully for candidate {name} (ID: {candidate_db.id})")
     
@@ -679,10 +679,10 @@ def get_score(
             detail=f"Job with ID {job_id} not found."
         )
 
-    cand_skills_list = list(cand_skills) if cand_skills else []
-    job_reqs_list = list(job.requirements) if job.requirements else []
-    cand_exp_val = int(cand_exp) if cand_exp is not None else 0
-    job_exp_val = int(job.experience_required) if job.experience_required is not None else 0
+    cand_skills_list = cast(list, cand_skills) if cand_skills else []
+    job_reqs_list = cast(list, job.requirements) if job.requirements else []
+    cand_exp_val = cast(int, cand_exp) if cand_exp is not None else 0
+    job_exp_val = cast(int, job.experience_required) if job.experience_required is not None else 0
 
     score, matched, missing, gap = calculate_match_score(
         cand_skills_list,
@@ -744,13 +744,13 @@ def update_candidate_status(
         )
         
     old_status = str(candidate.status)
-    setattr(candidate, "status", str(status_in.status))
+    setattr(candidate, "status", status_in.status)
     db.commit()
     db.refresh(candidate)
     
-    invalidate_candidate(int(candidate.id))
-    cache_candidate(int(candidate.id), serialize_candidate(candidate))
-    log_candidate_history(db, int(candidate.id), "Status Updated", f"Status changed from {old_status} to {status_in.status}", str(_current_user.username))
+    invalidate_candidate(cast(int, candidate.id))
+    cache_candidate(cast(int, candidate.id), serialize_candidate(candidate))
+    log_candidate_history(db, cast(int, candidate.id), "Status Updated", f"Status changed from {old_status} to {status_in.status}", str(_current_user.username))
     
     logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
     return candidate

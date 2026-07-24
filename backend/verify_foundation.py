@@ -69,6 +69,7 @@ def verify_all():
     # Verify score is saved in database
     db = SessionLocal()
     updated_cand = db.query(models.Candidate).filter(models.Candidate.id == cand_id).first()
+    assert updated_cand is not None
     print("Saved Candidate Score in DB:", updated_cand.score)
     assert updated_cand.score == 66.67
     db.close()

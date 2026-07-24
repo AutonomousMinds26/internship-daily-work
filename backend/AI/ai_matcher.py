@@ -3,13 +3,13 @@ import hashlib
 import logging
 
 try:
+    from .llm import llm
+    from .prompts import AI_SCORE_PROMPT
+    from .scorer import calculate_score
+except ImportError:
     from AI.llm import llm
     from AI.prompts import AI_SCORE_PROMPT
     from AI.scorer import calculate_score
-except ImportError:
-    from llm import llm
-    from prompts import AI_SCORE_PROMPT
-    from scorer import calculate_score
 
 ai_logger = logging.getLogger("ai_processing")
 
@@ -42,7 +42,19 @@ def ai_match_candidate(candidate, job):
     ai_logger.info(f"Invoking LLM for candidate '{candidate.get('name')}' matching")
     response = llm.invoke(prompt)
 
-    content = response.content.strip()
+    raw_content = response.content
+    if isinstance(raw_content, str):
+        content = raw_content.strip()
+    elif isinstance(raw_content, list):
+        parts = []
+        for part in raw_content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and "text" in part:
+                parts.append(str(part["text"]))
+        content = " ".join(parts).strip()
+    else:
+        content = str(raw_content).strip()
 
     # Remove markdown if AI returns it
     content = content.replace("```json", "").replace("```", "").strip()
@@ -81,9 +93,14 @@ def ai_match_candidate(candidate, job):
 # -----------------------------
 if __name__ == "__main__":
 
-    from document_reader import extract_resume_text
-    from resume_extractor import extract_candidate_info
-    from job_extractor import extract_job_info
+    try:
+        from .document_reader import extract_resume_text
+        from .resume_extractor import extract_candidate_info
+        from .job_extractor import extract_job_info
+    except ImportError:
+        from AI.document_reader import extract_resume_text
+        from AI.resume_extractor import extract_candidate_info
+        from AI.job_extractor import extract_job_info
 
     resume_text = extract_resume_text(
         "sample_resumes/sample1.pdf"

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, cast
 import logging
 
 from app.database import get_db
@@ -49,7 +49,7 @@ def create_job(
     db.commit()
     db.refresh(db_job)
 
-    cache_job(db_job.id, serialize_job(db_job))
+    cache_job(cast(int, db_job.id), serialize_job(db_job))
     logger.info(f"Job created successfully with ID: {db_job.id}")
     return db_job
 
