@@ -833,56 +833,54 @@ else:
                         res = api_request("POST", f"/upload_resume?job_id={job_id}", files=files)
                         
                         progress_bar.progress(100)
-                        status_text.empty()
-                            
-                            if res is not None:
-                                if res.status_code == 201:
-                                    match_result = res.json()
-                                    st.success("🎉 Resume Uploaded and Matched Successfully!")
+                        if res is not None:
+                            if res.status_code == 201:
+                                match_result = res.json()
+                                st.success("🎉 Resume Uploaded and Matched Successfully!")
+                                
+                                # Preview profile match
+                                with st.container(border=True):
+                                    st.subheader(f"👤 Candidate: {match_result['candidate']}")
+                                    st.write(f"**Email:** {match_result['email']}")
                                     
-                                    # Preview profile match
-                                    with st.container(border=True):
-                                        st.subheader(f"👤 Candidate: {match_result['candidate']}")
-                                        st.write(f"**Email:** {match_result['email']}")
-                                        
-                                        rec_val = match_result['recommendation']
-                                        rec_color = "green" if "shortlist" in rec_val.lower() else "orange"
-                                        st.write(f"**AI Recommendation:** :{rec_color}[{rec_val}]")
-                                        
-                                        match_pct = match_result['match_percentage']
-                                        st.markdown(f"**AI Match Compatibility: {match_pct}%**")
-                                        st.progress(match_pct / 100.0)
-                                        
-                                        col_skills1, col_skills2 = st.columns(2)
-                                        with col_skills1:
-                                            st.markdown("✅ **Matched Skills**")
-                                            if match_result["matched_skills"]:
-                                                st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in match_result["matched_skills"]]), unsafe_allow_html=True)
-                                            else:
-                                                st.caption("None matched")
-                                        with col_skills2:
-                                            st.markdown("❌ **Missing Skills**")
-                                            if match_result["missing_skills"]:
-                                                st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in match_result["missing_skills"]]), unsafe_allow_html=True)
-                                            else:
-                                                st.caption("None missing")
-                                                
-                                        st.markdown("---")
-                                        col_sw1, col_sw2 = st.columns(2)
-                                        with col_sw1:
-                                            st.markdown("💪 **AI Identified Strengths**")
-                                            if match_result.get("strengths"):
-                                                for s in match_result["strengths"]:
-                                                    st.markdown(f"- {s}")
-                                            else:
-                                                st.caption("No strengths highlighted")
-                                        with col_sw2:
-                                            st.markdown("⚠️ **AI Identified Weaknesses / Gaps**")
-                                            if match_result.get("weaknesses"):
-                                                for w in match_result["weaknesses"]:
-                                                    st.markdown(f"- {w}")
-                                            else:
-                                                st.caption("No weaknesses highlighted")
+                                    rec_val = match_result['recommendation']
+                                    rec_color = "green" if "shortlist" in rec_val.lower() else "orange"
+                                    st.write(f"**AI Recommendation:** :{rec_color}[{rec_val}]")
+                                    
+                                    match_pct = match_result['match_percentage']
+                                    st.markdown(f"**AI Match Compatibility: {match_pct}%**")
+                                    st.progress(match_pct / 100.0)
+                                    
+                                    col_skills1, col_skills2 = st.columns(2)
+                                    with col_skills1:
+                                        st.markdown("✅ **Matched Skills**")
+                                        if match_result["matched_skills"]:
+                                            st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in match_result["matched_skills"]]), unsafe_allow_html=True)
+                                        else:
+                                            st.caption("None matched")
+                                    with col_skills2:
+                                        st.markdown("❌ **Missing Skills**")
+                                        if match_result["missing_skills"]:
+                                            st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in match_result["missing_skills"]]), unsafe_allow_html=True)
+                                        else:
+                                            st.caption("None missing")
+                                            
+                                    st.markdown("---")
+                                    col_sw1, col_sw2 = st.columns(2)
+                                    with col_sw1:
+                                        st.markdown("💪 **AI Identified Strengths**")
+                                        if match_result.get("strengths"):
+                                            for s in match_result["strengths"]:
+                                                st.markdown(f"- {s}")
+                                        else:
+                                            st.caption("No strengths highlighted")
+                                    with col_sw2:
+                                        st.markdown("⚠️ **AI Identified Weaknesses / Gaps**")
+                                        if match_result.get("weaknesses"):
+                                            for w in match_result["weaknesses"]:
+                                                st.markdown(f"- {w}")
+                                        else:
+                                            st.caption("No weaknesses highlighted")
                             
                             # Invalid Resume parsing error (HTTP 400)
                             elif res.status_code == 400:

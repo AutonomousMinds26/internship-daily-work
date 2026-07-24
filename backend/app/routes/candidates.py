@@ -31,7 +31,7 @@ status_update_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager"
 
 VALID_STATUSES = ["Applied", "Parsed", "Matched", "Shortlisted", "Interview Scheduled", "Selected", "Rejected", "Screening", "Interview"]
 
-def log_candidate_history(db: Session, candidate_id: int, action: str, details: str = None, performed_by: str = None):
+def log_candidate_history(db: Session, candidate_id: int, action: str, details: Optional[str] = None, performed_by: Optional[str] = None):
     """Helper to append a history record for a candidate."""
     try:
         history = CandidateHistory(
@@ -91,8 +91,8 @@ def create_candidate(
     db.refresh(db_candidate)
 
     # Invalidate & cache
-    cache_candidate(db_candidate.id, serialize_candidate(db_candidate))
-    log_candidate_history(db, db_candidate.id, "Candidate Created", f"Candidate {db_candidate.name} created manually", current_user.username)
+    cache_candidate(int(db_candidate.id), serialize_candidate(db_candidate))
+    log_candidate_history(db, int(db_candidate.id), "Candidate Created", f"Candidate {db_candidate.name} created manually", str(current_user.username))
 
     logger.info(f"Candidate created with ID: {db_candidate.id}")
     return db_candidate
@@ -239,9 +239,9 @@ def update_candidate(
     db.commit()
     db.refresh(candidate)
 
-    invalidate_candidate(candidate.id)
-    cache_candidate(candidate.id, serialize_candidate(candidate))
-    log_candidate_history(db, candidate.id, "Candidate Updated", f"Updated fields: {list(update_data.keys())}", current_user.username)
+    invalidate_candidate(int(candidate.id))
+    cache_candidate(int(candidate.id), serialize_candidate(candidate))
+    log_candidate_history(db, int(candidate.id), "Candidate Updated", f"Updated fields: {list(update_data.keys())}", str(current_user.username))
 
     logger.info(f"Candidate {candidate_id} updated successfully.")
     return candidate
@@ -298,7 +298,7 @@ async def upload_resume(
             db.add(job)
             db.commit()
             db.refresh(job)
-        job_id = job.id
+        job_id = int(job.id)
     else:
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
@@ -309,7 +309,7 @@ async def upload_resume(
             )
 
     # 2. Extract text from uploaded file
-    filename = file.filename.lower()
+    filename = (file.filename or "").lower()
     text = ""
     file_type = "pdf" if filename.endswith(".pdf") else "txt" if filename.endswith(".txt") else "unknown"
     if filename.endswith(".pdf"):
@@ -417,7 +417,8 @@ async def upload_resume(
     # 5. Extract Job Info
     job_info = None
     if ai_extract_job is not None:
-        job_text = f"Job Title: {job.title}\nJob Description: {job.description}\nRequired Skills: {', '.join(job.requirements)}\nRequired Experience: {job.experience_required} years"
+        req_skills = list(job.requirements or [])
+        job_text = f"Job Title: {job.title}\nJob Description: {job.description}\nRequired Skills: {', '.join(req_skills)}\nRequired Experience: {job.experience_required} years"
         try:
             job_info = ai_extract_job(job_text)
         except Exception as e:
@@ -544,10 +545,10 @@ async def upload_resume(
     db.commit()
 
     # Invalidate cache if it existed, and cache the new data
-    invalidate_candidate(candidate_db.id)
+    invalidate_candidate(int(candidate_db.id))
     cand_dict = serialize_candidate(candidate_db)
-    cache_candidate(candidate_db.id, cand_dict)
-    log_candidate_history(db, candidate_db.id, "Resume Uploaded & Parsed", f"Uploaded file {file.filename} for job {job.title}", _current_user.username)
+    cache_candidate(int(candidate_db.id), cand_dict)
+    log_candidate_history(db, int(candidate_db.id), "Resume Uploaded & Parsed", f"Uploaded file {file.filename} for job {job.title}", str(_current_user.username))
 
     logger.info(f"Resume processed and matched successfully for candidate {name} (ID: {candidate_db.id})")
     
@@ -678,11 +679,16 @@ def get_score(
             detail=f"Job with ID {job_id} not found."
         )
 
+    cand_skills_list = list(cand_skills) if cand_skills else []
+    job_reqs_list = list(job.requirements) if job.requirements else []
+    cand_exp_val = int(cand_exp) if cand_exp is not None else 0
+    job_exp_val = int(job.experience_required) if job.experience_required is not None else 0
+
     score, matched, missing, gap = calculate_match_score(
-        cand_skills,
-        job.requirements,
-        cand_exp,
-        job.experience_required
+        cand_skills_list,
+        job_reqs_list,
+        cand_exp_val,
+        job_exp_val
     )
 
     # Persist score record in DB
@@ -737,14 +743,14 @@ def update_candidate_status(
             detail=f"Candidate with ID {candidate_id} not found."
         )
         
-    old_status = candidate.status
-    candidate.status = status_in.status
+    old_status = str(candidate.status)
+    setattr(candidate, "status", str(status_in.status))
     db.commit()
     db.refresh(candidate)
     
-    invalidate_candidate(candidate.id)
-    cache_candidate(candidate.id, serialize_candidate(candidate))
-    log_candidate_history(db, candidate.id, "Status Updated", f"Status changed from {old_status} to {status_in.status}", _current_user.username)
+    invalidate_candidate(int(candidate.id))
+    cache_candidate(int(candidate.id), serialize_candidate(candidate))
+    log_candidate_history(db, int(candidate.id), "Status Updated", f"Status changed from {old_status} to {status_in.status}", str(_current_user.username))
     
     logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
     return candidate
