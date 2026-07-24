@@ -9,7 +9,7 @@ from app.database import engine, Base, SessionLocal
 from app.logging_config import setup_logging
 from app.models import User
 from app.auth import get_password_hash
-from app.routes import auth, jobs, candidates
+from app.routes import auth, jobs, candidates, interviews, emails, monitoring
 
 # Initialize logging configuration
 setup_logging()
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="RecruiterAI API",
-    description="Backend API for candidate resumes and jobs screening",
+    description="Backend API for candidate resumes, jobs screening, interview scheduling, and candidate status management.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -94,7 +94,11 @@ async def log_requests_and_handle_errors(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(candidates.router)
+app.include_router(interviews.router)
+app.include_router(emails.router)
+app.include_router(monitoring.router)
 
 @app.get("/")
-def health_check():
-    return {"status": "healthy", "service": "RecruiterAI API"}
+def home():
+    return {"status": "healthy", "service": "RecruiterAI API", "version": "1.0.0"}
+

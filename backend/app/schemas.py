@@ -63,6 +63,20 @@ class CandidateCreate(BaseModel):
     resume_text: Optional[str] = None
     status: Optional[str] = "Applied"
 
+class CandidateUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    education: Optional[str] = None
+    experience: Optional[int] = None
+    skills: Optional[List[str]] = None
+    projects: Optional[List[str]] = None
+    notice_period: Optional[str] = None
+    expected_ctc: Optional[str] = None
+    location: Optional[str] = None
+    resume_text: Optional[str] = None
+    status: Optional[str] = None
+
 class CandidateResponse(BaseModel):
     id: int
     name: str
@@ -116,4 +130,92 @@ class UploadResumeResponse(BaseModel):
     notice_period: Optional[str] = None
     expected_ctc: Optional[str] = None
     status: Optional[str] = None
+
+# --- Interview Schemas ---
+class InterviewCreate(BaseModel):
+    candidate_id: int
+    job_id: int
+    interviewer_name: str
+    interviewer_email: EmailStr
+    scheduled_time: str
+    duration_minutes: Optional[int] = 45
+    mode: Optional[str] = "Online"
+    meeting_link: Optional[str] = None
+    notes: Optional[str] = None
+
+class InterviewUpdate(BaseModel):
+    interviewer_name: Optional[str] = None
+    interviewer_email: Optional[EmailStr] = None
+    scheduled_time: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    mode: Optional[str] = None
+    meeting_link: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+class InterviewResponse(BaseModel):
+    id: int
+    candidate_id: int
+    job_id: int
+    interviewer_name: str
+    interviewer_email: EmailStr
+    scheduled_time: str
+    duration_minutes: int
+    mode: str
+    meeting_link: Optional[str] = None
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Email Communication Schemas ---
+class EmailRequest(BaseModel):
+    candidate_id: int
+    subject: Optional[str] = None
+    message: Optional[str] = None
+
+class EmailResponse(BaseModel):
+    success: bool
+    candidate_id: int
+    email_type: str
+    recipient: str
+    message: str
+    timestamp: datetime
+
+# --- Candidate History Schemas ---
+class CandidateHistoryResponse(BaseModel):
+    id: int
+    candidate_id: int
+    action: str
+    details: Optional[str] = None
+    performed_by: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- Monitoring Schemas ---
+class HealthResponse(BaseModel):
+    status: str
+    database: str
+    redis: str
+
+class StatusResponse(BaseModel):
+    status: str
+    service: str
+    version: str
+    total_users: int
+    total_candidates: int
+    total_jobs: int
+    total_interviews: int
+
+class MetricsResponse(BaseModel):
+    total_candidates: int
+    candidates_by_status: dict
+    total_jobs: int
+    total_interviews: int
+    total_scores: int
+
 

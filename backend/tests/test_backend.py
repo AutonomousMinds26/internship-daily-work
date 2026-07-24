@@ -283,3 +283,192 @@ def test_patch_candidate_status(client, mock_redis):
     assert get_res.status_code == 200
     assert get_res.json()["status"] == "Shortlisted"
 
+# --- Candidate CRUD Tests ---
+def test_candidate_crud(client):
+    token = get_token(client, "recruiter_user")
+
+    # 1. Create candidate via POST /candidates
+    candidate_data = {
+        "name": "Sarah Connor",
+        "email": "sarah.connor@example.com",
+        "phone": "9998887770",
+        "education": "BS Computer Science",
+        "experience": 4,
+        "skills": ["Python", "Machine Learning", "FastAPI"],
+        "location": "Los Angeles",
+        "status": "Applied"
+    }
+    create_res = client.post(
+        "/candidates",
+        json=candidate_data,
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert create_res.status_code == 201
+    created_cand = create_res.json()
+    cand_id = created_cand["id"]
+    assert created_cand["name"] == "Sarah Connor"
+
+    # 2. List all candidates via GET /candidates
+    list_res = client.get(
+        "/candidates",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert list_res.status_code == 200
+    assert any(c["id"] == cand_id for c in list_res.json())
+
+    # 3. Get candidate by ID via GET /candidates/{id}
+    get_res = client.get(
+        f"/candidates/{cand_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert get_res.status_code == 200
+    assert get_res.json()["email"] == "sarah.connor@example.com"
+
+    # 4. Update candidate via PUT /candidates/{id}
+    update_res = client.put(
+        f"/candidates/{cand_id}",
+        json={"location": "San Francisco", "status": "Matched"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert update_res.status_code == 200
+    assert update_res.json()["location"] == "San Francisco"
+    assert update_res.json()["status"] == "Matched"
+
+    # 5. Delete candidate via DELETE /candidates/{id}
+    delete_res = client.delete(
+        f"/candidates/{cand_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert delete_res.status_code == 200
+
+    # Verify candidate is deleted
+    get_deleted = client.get(
+        f"/candidates/{cand_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert get_deleted.status_code == 404
+
+# --- Interview Management Tests ---
+def test_interview_management(client):
+    token = get_token(client, "recruiter_user")
+
+    # Create job & candidate
+    job_res = client.post(
+        "/jobs",
+        json={"title": "DevOps Engineer", "description": "Manage CI/CD", "requirements": ["Docker", "Kubernetes"], "experience_required": 3},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    job_id = job_res.json()["id"]
+
+    cand_res = client.post(
+        "/candidates",
+        json={"name": "Alex Murphy", "email": "alex.murphy@example.com", "experience": 3, "skills": ["Docker", "Linux"]},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    cand_id = cand_res.json()["id"]
+
+    # 1. Schedule Interview
+    interview_payload = {
+        "candidate_id": cand_id,
+        "job_id": job_id,
+        "interviewer_name": "Dave Bowman",
+        "interviewer_email": "dave@example.com",
+        "scheduled_time": "2026-08-01T10:00:00Z",
+        "duration_minutes": 60,
+        "mode": "Online",
+        "meeting_link": "https://meet.example.com/interview-1"
+    }
+    sch_res = client.post(
+        "/interview",
+        json=interview_payload,
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert sch_res.status_code == 201
+    interview_data = sch_res.json()
+    interview_id = interview_data["id"]
+    assert interview_data["interviewer_name"] == "Dave Bowman"
+
+    # Verify candidate status updated to 'Interview Scheduled'
+    cand_get = client.get(f"/candidates/{cand_id}", headers={"Authorization": f"Bearer {token}"})
+    assert cand_get.json()["status"] == "Interview Scheduled"
+
+    # 2. Get Interviews
+    get_list = client.get("/interview", headers={"Authorization": f"Bearer {token}"})
+    assert get_list.status_code == 200
+    assert any(i["id"] == interview_id for i in get_list.json())
+
+    # 3. Update Interview
+    put_res = client.put(
+        f"/interview/{interview_id}",
+        json={"notes": "Focus on Kubernetes setup"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert put_res.status_code == 200
+    assert put_res.json()["notes"] == "Focus on Kubernetes setup"
+
+    # 4. Cancel/Delete Interview
+    del_res = client.delete(f"/interview/{interview_id}", headers={"Authorization": f"Bearer {token}"})
+    assert del_res.status_code == 200
+
+# --- Email Communication Tests ---
+def test_email_communication(client):
+    token = get_token(client, "recruiter_user")
+
+    cand_res = client.post(
+        "/candidates",
+        json={"name": "Grace Hopper", "email": "grace.hopper@example.com", "skills": ["COBOL", "Python"]},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    cand_id = cand_res.json()["id"]
+
+    # 1. Send Shortlist
+    short_res = client.post(
+        "/send-shortlist",
+        json={"candidate_id": cand_id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert short_res.status_code == 200
+    assert short_res.json()["success"] is True
+
+    # Check status updated to Shortlisted
+    cand_check = client.get(f"/candidates/{cand_id}", headers={"Authorization": f"Bearer {token}"})
+    assert cand_check.json()["status"] == "Shortlisted"
+
+    # 2. Send Interview Email
+    inv_res = client.post(
+        "/send-interview",
+        json={"candidate_id": cand_id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert inv_res.status_code == 200
+
+    # 3. Send Rejection Email
+    rej_res = client.post(
+        "/send-rejection",
+        json={"candidate_id": cand_id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert rej_res.status_code == 200
+
+    # Check status updated to Rejected
+    cand_check2 = client.get(f"/candidates/{cand_id}", headers={"Authorization": f"Bearer {token}"})
+    assert cand_check2.json()["status"] == "Rejected"
+
+# --- Monitoring APIs Tests ---
+def test_monitoring_endpoints(client):
+    # Health check does not require auth
+    health_res = client.get("/health")
+    assert health_res.status_code == 200
+    assert "database" in health_res.json()
+
+    # System status
+    status_res = client.get("/status")
+    assert status_res.status_code == 200
+    assert status_res.json()["status"] == "running"
+
+    # Metrics
+    metrics_res = client.get("/metrics")
+    assert metrics_res.status_code == 200
+    assert "candidates_by_status" in metrics_res.json()
+
+

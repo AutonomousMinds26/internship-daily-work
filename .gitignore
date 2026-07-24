@@ -7,8 +7,8 @@ __pycache__/
 *.sqlite
 
 # Application logs
-app.log
-error.log
+*.log
+
 
 # Environment configuration
 .env
