@@ -1,7 +1,11 @@
 import json
 
-from llm import llm
-from prompts import RESUME_PROMPT
+try:
+    from AI.llm import llm
+    from AI.prompts import RESUME_PROMPT
+except ImportError:
+    from llm import llm
+    from prompts import RESUME_PROMPT
 
 
 def extract_candidate_info(resume_text):

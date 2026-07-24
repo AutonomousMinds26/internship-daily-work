@@ -2,9 +2,14 @@ import json
 import hashlib
 import logging
 
-from llm import llm
-from prompts import AI_SCORE_PROMPT
-from scorer import calculate_score
+try:
+    from AI.llm import llm
+    from AI.prompts import AI_SCORE_PROMPT
+    from AI.scorer import calculate_score
+except ImportError:
+    from llm import llm
+    from prompts import AI_SCORE_PROMPT
+    from scorer import calculate_score
 
 ai_logger = logging.getLogger("ai_processing")
 

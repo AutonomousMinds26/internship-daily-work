@@ -290,10 +290,10 @@ async def upload_resume(
     extract_years = None
 
     try:
-        from resume_extractor import extract_candidate_info as ai_extract_candidate
-        from job_extractor import extract_job_info as ai_extract_job
-        from ai_matcher import ai_match_candidate
-        from scorer import extract_years
+        from AI.resume_extractor import extract_candidate_info as ai_extract_candidate
+        from AI.job_extractor import extract_job_info as ai_extract_job
+        from AI.ai_matcher import ai_match_candidate
+        from AI.scorer import extract_years
     except Exception as e:
         logger.warning(f"AI pipeline modules could not be loaded: {str(e)}")
 
@@ -366,10 +366,10 @@ async def upload_resume(
     if match_result is None:
         logger.info("Using Python scorer fallback.")
         try:
-            from scorer import calculate_score
+            from AI.scorer import calculate_score
             match_result = calculate_score(candidate_info, job_info)
         except Exception as e:
-            logger.error(f"Fallback Python scorer import failed: {str(e)}")
+            logger.error(f"Fallback Python scorer failed, using basic match fallback: {str(e)}")
             candidate_skills = {s.lower() for s in candidate_info.get("skills", [])}
             required_skills = {s.lower() for s in job_info.get("required_skills", [])}
             matched_skills = list(candidate_skills & required_skills)

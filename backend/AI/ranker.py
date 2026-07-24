@@ -1,10 +1,16 @@
 import os
 import json
 
-from document_reader import extract_resume_text
-from resume_extractor import extract_candidate_info
-from job_extractor import extract_job_info
-from ai_matcher import ai_match_candidate
+try:
+    from AI.document_reader import extract_resume_text
+    from AI.resume_extractor import extract_candidate_info
+    from AI.job_extractor import extract_job_info
+    from AI.ai_matcher import ai_match_candidate
+except ImportError:
+    from document_reader import extract_resume_text
+    from resume_extractor import extract_candidate_info
+    from job_extractor import extract_job_info
+    from ai_matcher import ai_match_candidate
 
 
 def rank_candidates(resume_folder, job_file):
