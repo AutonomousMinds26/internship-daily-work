@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Date, Time, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -38,4 +38,19 @@ class Job(Base):
     description = Column(Text, nullable=False)
     requirements = Column(JSON, default=[])       # List of required skills
     experience_required = Column(Integer, default=0) # Years required
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Interview(Base):
+    __tablename__ = "interviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+    candidate_name = Column(String, nullable=False)  # Denormalized for quick reads
+    candidate_email = Column(String, nullable=False)
+    interview_date = Column(String, nullable=False)  # ISO date string YYYY-MM-DD
+    interview_time = Column(String, nullable=False)  # HH:MM format
+    interviewer_name = Column(String, nullable=False)
+    platform = Column(String, nullable=False)         # Google Meet / Teams / Zoom
+    status = Column(String, default="Scheduled")      # Scheduled / Completed / Cancelled
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -97,3 +97,42 @@ class ScoreResponse(BaseModel):
     job_id: int
     match_score: float
     details: MatchDetails
+
+
+# --- Interview Schemas ---
+class InterviewCreate(BaseModel):
+    candidate_id: int
+    interview_date: str  # YYYY-MM-DD
+    interview_time: str  # HH:MM
+    interviewer_name: str
+    platform: str  # Google Meet / Microsoft Teams / Zoom
+    notes: Optional[str] = None
+
+class InterviewResponse(BaseModel):
+    id: int
+    candidate_id: int
+    candidate_name: str
+    candidate_email: str
+    interview_date: str
+    interview_time: str
+    interviewer_name: str
+    platform: str
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Communication Schemas ---
+class EmailRequest(BaseModel):
+    candidate_id: int
+    custom_message: Optional[str] = None
+
+class EmailResponse(BaseModel):
+    success: bool
+    message: str
+    candidate_id: int
+    email_type: str
+    recipient_email: str
