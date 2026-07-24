@@ -212,7 +212,7 @@ else:
     if st.session_state.role == "Candidate":
         nav_options = ["My Profile & Status", "Available Jobs"]
     else:
-        nav_options = ["Dashboard", "Candidates List", "Schedule Interview", "Upload Resume"]
+        nav_options = ["Dashboard", "AI Ranking", "Candidates List", "Schedule Interview", "Upload Resume"]
         if st.session_state.role == "Admin":
             nav_options.append("Admin Settings")
         
@@ -693,9 +693,13 @@ else:
                                     if not jobs:
                                         st.caption("No jobs defined.")
                                     else:
-                                        job_opts = {j['title']: j['id'] for j in jobs}
-                                        selected_job_title = st.selectbox("Job Target", list(job_opts.keys()), key=f"job_sel_{cand_id}")
-                                        job_id = job_opts[selected_job_title]
+                                        jobs_by_id = {j['id']: j for j in jobs}
+                                        job_id = st.selectbox(
+                                            "Job Target",
+                                            list(jobs_by_id.keys()),
+                                            format_func=lambda selected_id: f"{jobs_by_id[selected_id]['title']} (#{selected_id})",
+                                            key=f"job_sel_{cand_id}"
+                                        )
                                         
                                         if st.button("Run Compatibility Match", key=f"calc_btn_{cand_id}"):
                                             with st.spinner("Calculating compatibility..."):
@@ -759,6 +763,114 @@ else:
             else:
                 st.error("Failed to fetch candidate list.")
 
+    # AI RANKING PAGE
+    elif choice == "AI Ranking":
+        st.title("AI candidate ranking")
+        st.caption("Rank candidates against a selected job requirement.")
+
+        job_res = api_request("GET", "/job")
+        cand_res = api_request("GET", "/candidate")
+        if job_res is None or cand_res is None:
+            st.stop()
+        if job_res.status_code != 200 or cand_res.status_code != 200:
+            st.error("Failed to load candidates or jobs from the backend.")
+            st.stop()
+
+        jobs = job_res.json()
+        candidates = cand_res.json()
+        if not jobs:
+            st.warning("No job roles are available. Create a job role first.")
+            st.stop()
+        if not candidates:
+            st.info("No candidates are available to rank.")
+            st.stop()
+
+        def clear_ranking_results():
+            st.session_state.pop("ranking_results", None)
+            st.session_state.pop("ranking_job_title", None)
+            st.session_state.pop("ranking_errors", None)
+
+        jobs_by_id = {job["id"]: job for job in jobs}
+        job_id = st.selectbox(
+            "Job role",
+            list(jobs_by_id),
+            format_func=lambda selected_id: f"{jobs_by_id[selected_id]['title']} (#{selected_id})",
+            key="ranking_job_select",
+            on_change=clear_ranking_results,
+        )
+        selected_job_title = jobs_by_id[job_id]["title"]
+
+        if st.button("Rank all candidates", type="primary"):
+            ranked = []
+            ranking_errors = []
+            progress = st.progress(0, text="Scoring candidates...")
+            for index, candidate in enumerate(candidates, start=1):
+                score_res = api_request(
+                    "GET", f"/score?candidate_id={candidate['id']}&job_id={job_id}"
+                )
+                if score_res is not None and score_res.status_code == 200:
+                    score_data = score_res.json()
+                    ranked.append(
+                        {
+                            "candidate": candidate,
+                            "match_score": score_data["match_score"],
+                            "details": score_data["details"],
+                        }
+                    )
+                else:
+                    detail = "No response from the scoring service."
+                    if score_res is not None:
+                        try:
+                            detail = score_res.json().get(
+                                "detail", f"HTTP {score_res.status_code}"
+                            )
+                        except ValueError:
+                            detail = f"HTTP {score_res.status_code}"
+                    ranking_errors.append(f"{candidate['name']}: {detail}")
+                progress.progress(index / len(candidates), text=f"Scored {index}/{len(candidates)} candidates")
+            progress.empty()
+            st.session_state["ranking_results"] = sorted(
+                ranked, key=lambda entry: entry["match_score"], reverse=True
+            )
+            st.session_state["ranking_job_title"] = selected_job_title
+            st.session_state["ranking_errors"] = ranking_errors
+
+        ranking_errors = st.session_state.get("ranking_errors", [])
+        if ranking_errors:
+            st.warning(
+                f"{len(ranking_errors)} candidate(s) could not be scored and are excluded from the ranking."
+            )
+            with st.expander("View scoring errors"):
+                st.write("\n".join(f"- {error}" for error in ranking_errors))
+
+        ranked = st.session_state.get("ranking_results")
+        if ranked:
+            st.subheader(
+                f"Rankings for {st.session_state.get('ranking_job_title', selected_job_title)}"
+            )
+            shortlisted = sum(entry["match_score"] >= 70 for entry in ranked)
+            maybe = sum(40 <= entry["match_score"] < 70 for entry in ranked)
+            rejected = len(ranked) - shortlisted - maybe
+            total_col, shortlist_col, maybe_col, reject_col = st.columns(4)
+            total_col.metric("Ranked", len(ranked))
+            shortlist_col.metric("Shortlisted", shortlisted)
+            maybe_col.metric("Maybe", maybe)
+            reject_col.metric("Reject", rejected)
+
+            for rank, entry in enumerate(ranked, start=1):
+                candidate = entry["candidate"]
+                score = entry["match_score"]
+                recommendation = "Shortlisted" if score >= 70 else "Maybe" if score >= 40 else "Reject"
+                st.markdown(f"**#{rank} {candidate['name']}** — {score}% · {recommendation}")
+                with st.expander(f"View details for {candidate['name']}"):
+                    st.write(f"Email: {candidate.get('email', 'N/A')}")
+                    st.write(f"Experience: {candidate.get('experience', 'N/A')} years")
+                    st.write("Matched skills:", ", ".join(entry["details"].get("matched_skills", [])) or "None")
+                    st.write("Missing skills:", ", ".join(entry["details"].get("missing_skills", [])) or "None")
+                    gap = entry["details"].get("experience_gap", 0)
+                    if gap:
+                        st.write(f"Experience gap: {gap} years")
+
     # UPLOAD RESUME PAGE
     elif choice == "Upload Resume":
         st.title("📤 Resume Intelligence Uploader")
@@ -781,10 +893,12 @@ else:
                     Upload resumes in **PDF** or **TXT** formats. The backend will automatically extract candidate details and match them against the selected Job Role.
                 """)
                 
-                # Job Selection
-                job_options = {j['title']: j['id'] for j in jobs}
-                selected_job_title = st.selectbox("Select Target Job Role", list(job_options.keys()))
-                job_id = job_options[selected_job_title]
+                jobs_by_id = {j['id']: j for j in jobs}
+                job_id = st.selectbox(
+                    "Select Target Job Role",
+                    list(jobs_by_id.keys()),
+                    format_func=lambda selected_id: f"{jobs_by_id[selected_id]['title']} (#{selected_id})"
+                )
                 
                 uploaded_file = st.file_uploader("Select resume file", type=["pdf", "txt"])
                 
@@ -1229,9 +1343,13 @@ else:
                             if not jobs:
                                 st.info("No open job requirements available at the moment.")
                             else:
-                                job_opts = {j['title']: j['id'] for j in jobs}
-                                selected_job_title = st.selectbox("Select Job Target", list(job_opts.keys()), key="candidate_job_target")
-                                job_id = job_opts[selected_job_title]
+                                jobs_by_id = {j['id']: j for j in jobs}
+                                job_id = st.selectbox(
+                                    "Select Job Target",
+                                    list(jobs_by_id.keys()),
+                                    format_func=lambda selected_id: f"{jobs_by_id[selected_id]['title']} (#{selected_id})",
+                                    key="candidate_job_target"
+                                )
                                 
                                 if st.button("Check My Compatibility", use_container_width=True):
                                     score_res = api_request("GET", f"/score?candidate_id={candidate['id']}&job_id={job_id}")
