@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -9,13 +9,12 @@ class UserCreate(BaseModel):
     role: str = Field(..., description="Must be one of: Recruiter, Hiring Manager, Admin")
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     role: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class UserLogin(BaseModel):
     username: str
@@ -38,15 +37,14 @@ class JobCreate(BaseModel):
     experience_required: int = 0
 
 class JobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str
     requirements: List[str]
     experience_required: int
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 # --- Candidate Schemas ---
 class CandidateCreate(BaseModel):
@@ -78,6 +76,8 @@ class CandidateUpdate(BaseModel):
     status: Optional[str] = None
 
 class CandidateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     email: EmailStr
@@ -92,9 +92,6 @@ class CandidateResponse(BaseModel):
     resume_text: Optional[str] = None
     status: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class CandidateStatusUpdate(BaseModel):
     status: str
@@ -154,6 +151,8 @@ class InterviewUpdate(BaseModel):
     notes: Optional[str] = None
 
 class InterviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     candidate_id: int
     job_id: int
@@ -166,9 +165,6 @@ class InterviewResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 # --- Email Communication Schemas ---
 class EmailRequest(BaseModel):
@@ -186,15 +182,14 @@ class EmailResponse(BaseModel):
 
 # --- Candidate History Schemas ---
 class CandidateHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     candidate_id: int
     action: str
     details: Optional[str] = None
     performed_by: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 # --- Monitoring Schemas ---
 class HealthResponse(BaseModel):
@@ -217,5 +212,6 @@ class MetricsResponse(BaseModel):
     total_jobs: int
     total_interviews: int
     total_scores: int
+
 
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import Candidate, CandidateHistory
@@ -74,7 +74,7 @@ def send_shortlist_email(
         email_type="Shortlist",
         recipient=candidate.email,
         message=body,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -117,7 +117,7 @@ def send_interview_email(
         email_type="Interview Invitation",
         recipient=candidate.email,
         message=body,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -166,5 +166,6 @@ def send_rejection_email(
         email_type="Rejection",
         recipient=candidate.email,
         message=body,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
+

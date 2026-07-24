@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import fitz  # PyMuPDF
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
 
 from app.database import get_db
 from app.models import Candidate, Job, CandidateScore, Recommendation, CandidateHistory, Resume
@@ -60,7 +61,8 @@ def serialize_candidate(c: Candidate) -> dict:
         "location": c.location,
         "resume_text": c.resume_text,
         "status": c.status,
-        "created_at": c.created_at.isoformat() if c.created_at else datetime.utcnow().isoformat()
+        "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat()
+
     }
 
 # --- CANDIDATE CRUD APIs ---
@@ -330,8 +332,9 @@ async def upload_resume(
     candidate_info["experience"] = f"{experience_years} years"
 
     # Ensure basic fields are populated
-    email = candidate_info.get("email") or f"unknown_{int(datetime.utcnow().timestamp())}@recruiterai.com"
+    email = candidate_info.get("email") or f"unknown_{int(datetime.now(timezone.utc).timestamp())}@recruiterai.com"
     name = candidate_info.get("name") or "Unknown Candidate"
+
 
     # 5. Extract Job Info
     job_info = None

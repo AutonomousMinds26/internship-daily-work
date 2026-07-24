@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config import settings
+
 
 # Determine if we're using SQLite or another DB (e.g. PostgreSQL)
 is_sqlite = settings.DATABASE_URL.startswith("sqlite")
