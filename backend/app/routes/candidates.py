@@ -101,7 +101,7 @@ def create_candidate(
 @router.get("/candidates", response_model=List[CandidateResponse])
 def list_all_candidates(
     db: Session = Depends(get_db),
-    _current_user = Depends(any_auth_checker)
+    _current_user: User = Depends(any_auth_checker)
 ):
     """
     List all candidates in the database.
@@ -202,7 +202,7 @@ async def upload_resume(
     job_id: Optional[int] = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _current_user = Depends(recruiter_admin_checker)
+    _current_user: User = Depends(recruiter_admin_checker)
 ):
     """
     Upload resume (PDF or TXT), select Job Role, fetch Job Description, 
@@ -290,10 +290,16 @@ async def upload_resume(
     extract_years = None
 
     try:
-        from AI.resume_extractor import extract_candidate_info as ai_extract_candidate
-        from AI.job_extractor import extract_job_info as ai_extract_job
-        from AI.ai_matcher import ai_match_candidate
-        from AI.scorer import extract_years
+        try:
+            from AI.resume_extractor import extract_candidate_info as ai_extract_candidate
+            from AI.job_extractor import extract_job_info as ai_extract_job
+            from AI.ai_matcher import ai_match_candidate
+            from AI.scorer import extract_years
+        except ImportError:
+            from resume_extractor import extract_candidate_info as ai_extract_candidate  # type: ignore
+            from job_extractor import extract_job_info as ai_extract_job  # type: ignore
+            from ai_matcher import ai_match_candidate  # type: ignore
+            from scorer import extract_years  # type: ignore
     except Exception as e:
         logger.warning(f"AI pipeline modules could not be loaded: {str(e)}")
 
@@ -497,7 +503,7 @@ async def upload_resume(
 def get_candidate(
     id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _current_user = Depends(any_auth_checker)
+    _current_user: User = Depends(any_auth_checker)
 ):
     """
     Get all candidates or retrieve a single candidate by query param (uses cache-aside strategy).
@@ -559,7 +565,7 @@ def get_score(
     candidate_id: int,
     job_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(any_auth_checker)
+    _current_user: User = Depends(any_auth_checker)
 ):
     """
     Calculate and retrieve candidate compatibility score against a job.
@@ -639,7 +645,7 @@ def update_candidate_status(
     candidate_id: int,
     status_in: CandidateStatusUpdate,
     db: Session = Depends(get_db),
-    _current_user = Depends(status_update_checker)
+    _current_user: User = Depends(status_update_checker)
 ):
     """
     Update candidate status. Restricted to Recruiter, Hiring Manager, and Admin.
