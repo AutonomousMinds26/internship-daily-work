@@ -212,7 +212,7 @@ else:
     if st.session_state.role == "Candidate":
         nav_options = ["My Profile & Status", "Available Jobs"]
     else:
-        nav_options = ["Dashboard", "Candidates List", "Upload Resume"]
+        nav_options = ["Dashboard", "Candidates List", "Schedule Interview", "Upload Resume"]
         if st.session_state.role == "Admin":
             nav_options.append("Admin Settings")
         
@@ -229,127 +229,171 @@ else:
         st.title("📊 Recruiter Insights Dashboard")
         st.markdown("---")
         
-        # Load Candidates and Jobs from backend
-        cand_res = api_request("GET", "/candidate")
-        job_res = api_request("GET", "/job")
-        
-        if cand_res is not None and job_res is not None:
-            if cand_res.status_code == 200 and job_res.status_code == 200:
-                candidates = cand_res.json()
-                jobs = job_res.json()
-                
-                df_candidates = pd.DataFrame(candidates)
-                df_jobs = pd.DataFrame(jobs)
-                
-                # Compute Dashboard Stats
-                total_cand = len(candidates)
-                open_jobs = len(jobs)
-                
-                # Check status column exists
-                if not df_candidates.empty and 'status' in df_candidates.columns:
-                    shortlisted_cand = len(df_candidates[df_candidates['status'] == 'Shortlisted'])
-                    interviews_scheduled = len(df_candidates[df_candidates['status'] == 'Interview'])
-                    status_counts = df_candidates['status'].value_counts().to_dict()
-                else:
-                    shortlisted_cand = 0
-                    interviews_scheduled = 0
-                    status_counts = {}
-                
-                # Metrics Cards Grid
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-title">👤 Total Candidates</div>
-                            <div class="metric-value">{total_cand}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col2:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-title">💼 Open Jobs</div>
-                            <div class="metric-value">{open_jobs}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col3:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-title">⭐️ Shortlisted</div>
-                            <div class="metric-value">{shortlisted_cand}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col4:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-title">📅 Interviews</div>
-                            <div class="metric-value">{interviews_scheduled}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                
-                # Visual Charts Section
-                col_chart1, col_chart2 = st.columns([1.2, 1])
-                with col_chart1:
-                    st.subheader("📋 Candidate Status Distribution")
-                    all_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
-                    status_data = {status: status_counts.get(status, 0) for status in all_statuses}
-                    
-                    df_status = pd.DataFrame(list(status_data.items()), columns=["Status", "Count"])
-                    
-                    # Create Plotly Bar Chart
-                    fig_bar = px.bar(
-                        df_status, 
-                        x="Status", 
-                        y="Count", 
-                        color="Status",
-                        color_discrete_map={
-                            "Applied": "#6B7280",
-                            "Screening": "#3B82F6",
-                            "Shortlisted": "#F59E0B",
-                            "Interview": "#8B5CF6",
-                            "Selected": "#10B981"
-                        },
-                        text="Count"
+        with st.spinner("Fetching analytics statistics..."):
+            analytics_res = api_request("GET", "/analytics")
+            job_res = api_request("GET", "/job")
+            
+        if analytics_res is not None and analytics_res.status_code == 200:
+            analytics = analytics_res.json()
+            jobs = job_res.json() if job_res and job_res.status_code == 200 else []
+            
+            # Metrics Cards Grid
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-title">👤 Total Candidates</div>
+                        <div class="metric-value">{analytics['total_candidates']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-title">⭐ Shortlisted</div>
+                        <div class="metric-value">{analytics['shortlisted_candidates']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-title">❌ Rejected</div>
+                        <div class="metric-value">{analytics['rejected_candidates']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-title">📈 Avg Match %</div>
+                        <div class="metric-value">{analytics['average_match_percentage']}%</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with col5:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-title">📅 Pending Interviews</div>
+                        <div class="metric-value">{analytics['pending_interviews']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            
+            # Visual Charts Section - Row 1
+            col_chart1, col_chart2 = st.columns(2)
+            with col_chart1:
+                st.subheader("📊 Match Percentage Distribution")
+                match_scores = analytics.get("match_percentages", [])
+                if match_scores:
+                    df_dist = pd.DataFrame(match_scores, columns=["Match Score"])
+                    fig_dist = px.histogram(
+                        df_dist,
+                        x="Match Score",
+                        nbins=10,
+                        title="Distribution of Candidate Match Scores",
+                        color_discrete_sequence=["#4F46E5"],
+                        labels={"Match Score": "Match Percentage (%)"}
                     )
-                    fig_bar.update_layout(
-                        showlegend=False, 
-                        paper_bgcolor="rgba(0,0,0,0)", 
+                    fig_dist.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         font_color="#E5E7EB",
-                        yaxis_title="Candidates Count"
+                        yaxis_title="Count of Candidates"
                     )
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                    st.plotly_chart(fig_dist, use_container_width=True)
+                else:
+                    st.info("No compatibility matches recorded yet.")
                     
-                with col_chart2:
-                    st.subheader("💡 Experience Distribution")
-                    if not df_candidates.empty:
-                        fig_pie = px.pie(
-                            df_candidates,
-                            names="experience",
-                            title="Candidates by Years of Experience",
-                            hole=0.4,
-                            color_discrete_sequence=px.colors.qualitative.Pastel
-                        )
-                        fig_pie.update_layout(
-                            paper_bgcolor="rgba(0,0,0,0)", 
-                            font_color="#E5E7EB",
-                            legend_title="Years"
-                        )
-                        st.plotly_chart(fig_pie, use_container_width=True)
-                    else:
-                        st.info("No candidates uploaded yet to show experience stats.")
-            else:
-                st.error("Failed to load dashboard statistics from backend.")
+            with col_chart2:
+                st.subheader("💡 Recommendation Count")
+                recs_dict = analytics.get("recommendation_counts", {})
+                # Remove empty/null keys
+                recs_dict = {k: v for k, v in recs_dict.items() if k}
+                if recs_dict:
+                    df_recs = pd.DataFrame(list(recs_dict.items()), columns=["Recommendation", "Count"])
+                    fig_pie = px.pie(
+                        df_recs,
+                        names="Recommendation",
+                        values="Count",
+                        title="AI Recommendations Breakdown",
+                        hole=0.4,
+                        color="Recommendation",
+                        color_discrete_map={
+                            "Shortlisted": "#10B981",
+                            "Maybe": "#F59E0B",
+                            "Reject": "#EF4444",
+                            "Applied": "#6B7280"
+                        }
+                    )
+                    fig_pie.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="#E5E7EB"
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("No recommendations generated yet.")
+            
+            # Row 2
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_chart3, col_chart4 = st.columns(2)
+            with col_chart3:
+                st.subheader("💪 Skills Distribution")
+                skills_dict = analytics.get("skills_distribution", {})
+                if skills_dict:
+                    df_skills = pd.DataFrame(list(skills_dict.items()), columns=["Skill", "Count"]).sort_values(by="Count", ascending=True)
+                    fig_skills = px.bar(
+                        df_skills,
+                        x="Count",
+                        y="Skill",
+                        orientation="h",
+                        title="Top Candidate Skills (Top 15)",
+                        color="Count",
+                        color_continuous_scale="Viridis"
+                    )
+                    fig_skills.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font_color="#E5E7EB",
+                        xaxis_title="Number of Candidates",
+                        yaxis_title="Skill"
+                    )
+                    st.plotly_chart(fig_skills, use_container_width=True)
+                else:
+                    st.info("No candidate skills found.")
+                    
+            with col_chart4:
+                st.subheader("🏁 Hiring Funnel")
+                funnel_dict = analytics.get("hiring_funnel", {})
+                if funnel_dict:
+                    df_funnel = pd.DataFrame({
+                        "Stage": list(funnel_dict.keys()),
+                        "Count": list(funnel_dict.values())
+                    })
+                    fig_funnel = go.Figure(go.Funnel(
+                        y=df_funnel["Stage"],
+                        x=df_funnel["Count"],
+                        textinfo="value+percent initial",
+                        marker={"color": ["#6B7280", "#3B82F6", "#06B6D4", "#F59E0B", "#8B5CF6", "#10B981"]}
+                    ))
+                    fig_funnel.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font_color="#E5E7EB",
+                        title="Recruitment Pipeline Funnel"
+                    )
+                    st.plotly_chart(fig_funnel, use_container_width=True)
+                else:
+                    st.info("Funnel data unavailable.")
+        else:
+            st.error("Failed to load dashboard statistics from backend.")
 
     # CANDIDATES LIST PAGE
     elif choice == "Candidates List":
         st.title("👥 Candidate Pipeline Management")
         st.markdown("---")
         
-        # Load Candidates and Jobs from backend
-        cand_res = api_request("GET", "/candidate")
-        job_res = api_request("GET", "/job")
+        # Load Candidates with Details and Jobs
+        with st.spinner("Loading candidate pipeline..."):
+            cand_res = api_request("GET", "/candidates-with-details")
+            job_res = api_request("GET", "/job")
         
         if cand_res is not None and job_res is not None:
             if cand_res.status_code == 200 and job_res.status_code == 200:
@@ -361,31 +405,108 @@ else:
                 else:
                     df = pd.DataFrame(candidates)
                     
-                    # Filters bar
-                    st.subheader("🔍 Filters")
-                    col_f1, col_f2, col_f3 = st.columns(3)
-                    with col_f1:
-                        search_q = st.text_input("Search Candidate by Name/Skills", "")
-                    with col_f2:
-                        status_filter = st.selectbox("Status Filter", ["All", "Applied", "Screening", "Shortlisted", "Interview", "Selected"])
-                    with col_f3:
-                        min_exp = st.number_input("Minimum Experience (Years)", min_value=0, max_value=30, value=0)
-                    
-                    # Apply filters
+                    # Search and Filters block
+                    with st.container(border=True):
+                        st.subheader("🔍 Search and Filter Candidates")
+                        col_s1, col_s2 = st.columns([2, 1])
+                        with col_s1:
+                            search_q = st.text_input("Search Candidate by Name or Skills", "", placeholder="Enter candidate name or specific skill...")
+                        with col_s2:
+                            # Jobs filter
+                            job_titles = ["All"] + [j['title'] for j in jobs]
+                            job_filter = st.selectbox("Filter by Job Target", job_titles)
+                            
+                        col_f1, col_f2, col_f3 = st.columns(3)
+                        with col_f1:
+                            status_filter = st.selectbox("Filter by Status", ["All", "Applied", "Screening", "Shortlisted", "Interview Scheduled", "Selected", "Rejected"])
+                        with col_f2:
+                            rec_filter = st.selectbox("Filter by AI Recommendation", ["All", "Shortlisted", "Maybe", "Reject", "Applied"])
+                        with col_f3:
+                            min_exp = st.number_input("Minimum Experience (Years)", min_value=0, max_value=30, value=0)
+                            
+                    # Sorting block
+                    with st.container(border=True):
+                        st.subheader("↕️ Sorting Options")
+                        col_sort1, col_sort2 = st.columns(2)
+                        with col_sort1:
+                            sort_by = st.selectbox("Sort By", ["Match Percentage", "Experience", "Upload Date"])
+                        with col_sort2:
+                            sort_order = st.radio("Sort Order", ["Descending", "Ascending"], horizontal=True)
+
+                    # Apply Search and Filters
                     filtered_df = df
+                    
+                    # 1. Search Query (Name or Skills)
                     if search_q:
+                        q_lower = search_q.lower()
                         filtered_df = filtered_df[
-                            filtered_df['name'].str.contains(search_q, case=False, na=False) |
-                            filtered_df['skills'].apply(lambda skills: any(search_q.lower() in s.lower() for s in skills))
+                            filtered_df['name'].str.contains(q_lower, case=False, na=False) |
+                            filtered_df['skills'].apply(lambda skills: any(q_lower in s.lower() for s in skills) if isinstance(skills, list) else False)
                         ]
+                        
+                    # 2. Job Filter
+                    if job_filter != "All":
+                        filtered_df = filtered_df[filtered_df['primary_job_title'] == job_filter]
+                        
+                    # 3. Status Filter
                     if status_filter != "All":
                         filtered_df = filtered_df[filtered_df['status'] == status_filter]
+                        
+                    # 4. Recommendation Filter
+                    if rec_filter != "All":
+                        filtered_df = filtered_df[filtered_df['recommendation'].str.contains(rec_filter, case=False, na=False)]
+                        
+                    # 5. Experience Filter
                     filtered_df = filtered_df[filtered_df['experience'] >= min_exp]
                     
-                    st.markdown(f"Showing **{len(filtered_df)}** candidates.")
+                    # Apply Sorting
+                    ascending = (sort_order == "Ascending")
+                    if sort_by == "Match Percentage":
+                        filtered_df = filtered_df.sort_values(by="match_percentage", ascending=ascending)
+                    elif sort_by == "Experience":
+                        filtered_df = filtered_df.sort_values(by="experience", ascending=ascending)
+                    elif sort_by == "Upload Date":
+                        filtered_df = filtered_df.sort_values(by="created_at", ascending=ascending, na_position="last")
+                        
+                    total_results = len(filtered_df)
+                    st.write(f"Showing **{total_results}** candidates.")
+                    
+                    # Pagination block
+                    col_page_size, col_page_num = st.columns([1, 2])
+                    with col_page_size:
+                        page_size = st.selectbox("Candidates per page", [5, 10, 20], index=0)
+                        
+                    total_pages = max(1, (total_results + page_size - 1) // page_size)
+                    
+                    if "cand_page" not in st.session_state:
+                        st.session_state.cand_page = 1
+                        
+                    if st.session_state.cand_page > total_pages:
+                        st.session_state.cand_page = 1
+                        
+                    with col_page_num:
+                        with st.container(horizontal=True, horizontal_alignment="center"):
+                            prev_disabled = st.session_state.cand_page <= 1
+                            next_disabled = st.session_state.cand_page >= total_pages
+                            
+                            if st.button("⬅️ Previous", disabled=prev_disabled):
+                                st.session_state.cand_page -= 1
+                                st.rerun()
+                                
+                            st.write(f"Page **{st.session_state.cand_page}** of **{total_pages}**")
+                            
+                            if st.button("Next ➡️", disabled=next_disabled):
+                                st.session_state.cand_page += 1
+                                st.rerun()
+
+                    # Slice dataframe for pagination
+                    start_idx = (st.session_state.cand_page - 1) * page_size
+                    end_idx = start_idx + page_size
+                    paginated_df = filtered_df.iloc[start_idx:end_idx]
                     
                     # Render candidates table
-                    for index, row in filtered_df.iterrows():
+                    for index, row in paginated_df.iterrows():
+                        cand_id = row['id']
                         with st.container():
                             st.markdown(f"""
                                 <div class="profile-container">
@@ -398,6 +519,9 @@ else:
                                     <p style="margin: 5px 0; color: #9CA3AF; font-size: 14px;">
                                         📧 <b>Email:</b> {row['email']} | 📞 <b>Phone:</b> {row['phone'] or 'N/A'} | ⏳ <b>Exp:</b> {row['experience']} years
                                     </p>
+                                    <p style="margin: 5px 0; color: #9CA3AF; font-size: 14px;">
+                                        💼 <b>Job Target:</b> {row['primary_job_title']} | 🎯 <b>Match Score:</b> {row['match_percentage']}% | 💡 <b>AI Recommendation:</b> {row['recommendation']}
+                                    </p>
                                     <div style="margin: 10px 0;">
                                         <b>Skills:</b> {' '.join([f'<span class="badge badge-skill">{s}</span>' for s in row['skills']]) if row['skills'] else 'None'}
                                     </div>
@@ -405,7 +529,82 @@ else:
                             """, unsafe_allow_html=True)
                             
                             # Expandable candidate actions
-                            with st.expander(f"Inspect profile & compatibility for {row['name']}", expanded=False):
+                            with st.expander(f"Inspect profile, journey timeline & communications for {row['name']}", expanded=False):
+                                # Journey timeline
+                                st.subheader("🎯 Application Journey Tracker")
+                                
+                                stages = [
+                                    "Resume Uploaded",
+                                    "Resume Parsed",
+                                    "Job Matched",
+                                    "Shortlisted",
+                                    "Interview Scheduled",
+                                    "Selected",
+                                    "Offer Released"
+                                ]
+                                
+                                status_mapping = {
+                                    "Applied": 0,
+                                    "Screening": 0,
+                                    "Parsed": 1,
+                                    "Matched": 2,
+                                    "Shortlisted": 3,
+                                    "Interview Scheduled": 4,
+                                    "Interview": 4,
+                                    "Selected": 5,
+                                    "Offer Released": 6
+                                }
+                                current_status = row['status']
+                                current_idx = status_mapping.get(current_status, 0)
+                                
+                                timeline_html = """
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto;">
+                                """
+                                for idx, stage in enumerate(stages):
+                                    is_completed = idx < current_idx
+                                    is_current = idx == current_idx
+                                    
+                                    if current_status == "Rejected" and idx == current_idx:
+                                        icon = "❌"
+                                        bg = "rgba(239, 68, 68, 0.2)"
+                                        text = "#F87171"
+                                        border = "rgba(239, 68, 68, 0.4)"
+                                        stage_text = "Rejected"
+                                    elif is_completed:
+                                        icon = "✅"
+                                        bg = "rgba(16, 185, 129, 0.15)"
+                                        text = "#34D399"
+                                        border = "rgba(16, 185, 129, 0.3)"
+                                        stage_text = stage
+                                    elif is_current:
+                                        icon = "🔵"
+                                        bg = "rgba(79, 70, 229, 0.2)"
+                                        text = "#818CF8"
+                                        border = "rgba(79, 70, 229, 0.5)"
+                                        stage_text = stage
+                                    else:
+                                        icon = "⚪"
+                                        bg = "rgba(255, 255, 255, 0.02)"
+                                        text = "#6B7280"
+                                        border = "rgba(255, 255, 255, 0.05)"
+                                        stage_text = stage
+                                        
+                                    timeline_html += f"""
+                                    <div style="flex: 1; min-width: 100px; text-align: center; padding: 6px; margin: 0 4px; background: {bg}; border: 1px solid {border}; border-radius: 6px; color: {text}; font-size: 11px; font-weight: 600;">
+                                        <div style="font-size: 14px; margin-bottom: 2px;">{icon}</div>
+                                        <div>{stage_text}</div>
+                                    </div>
+                                    """
+                                    if idx < len(stages) - 1:
+                                        line_color = "rgba(16, 185, 129, 0.5)" if idx < current_idx else "rgba(255, 255, 255, 0.1)"
+                                        timeline_html += f"""
+                                        <div style="flex: 0.1; height: 2px; min-width: 10px; background-color: {line_color}; margin: 0 -4px;"></div>
+                                        """
+                                timeline_html += "</div>"
+                                st.markdown(timeline_html, unsafe_allow_html=True)
+                                
+                                st.markdown("---")
+                                
                                 col_d1, col_d2 = st.columns([1.2, 1])
                                 
                                 with col_d1:
@@ -416,50 +615,101 @@ else:
                                     
                                     # Status Update block
                                     st.markdown("---")
-                                    st.markdown("#### Update Status")
-                                    current_status = row['status']
-                                    status_options = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
+                                    st.markdown("#### Update Status Manually")
+                                    status_options = ["Applied", "Screening", "Shortlisted", "Interview Scheduled", "Selected", "Rejected"]
                                     try:
                                         status_idx = status_options.index(current_status)
                                     except ValueError:
                                         status_idx = 0
                                         
-                                    new_status = st.selectbox("Assign Status", status_options, index=status_idx, key=f"status_select_{row['id']}")
+                                    new_status = st.selectbox("Assign Status", status_options, index=status_idx, key=f"status_select_{cand_id}")
                                     
-                                    if st.button("Update Status", key=f"update_btn_{row['id']}"):
-                                        # Call API
-                                        patch_res = api_request("PATCH", f"/candidate/{row['id']}/status", json={"status": new_status})
+                                    if st.button("Update Status", key=f"update_btn_{cand_id}"):
+                                        with st.spinner("Updating status..."):
+                                            patch_res = api_request("PATCH", f"/candidate/{cand_id}/status", json={"status": new_status})
                                         if patch_res and patch_res.status_code == 200:
-                                            st.toast(f"Successfully updated {row['name']} status to {new_status}!", icon="✅")
+                                            st.toast(f"Successfully updated status to {new_status}!", icon="✅")
                                             time.sleep(0.5)
                                             st.rerun()
                                         elif patch_res:
                                             st.error(f"Failed to update status: {patch_res.json().get('detail', 'Unknown error')}")
                                 
                                 with col_d2:
-                                    st.markdown("### Compatibility Scoring")
+                                    st.markdown("### 📧 Candidate Communication")
+                                    st.caption("Send recruitment updates to the candidate via Email.")
+                                    
+                                    email_subject = st.text_input("Custom Email Subject (Optional)", key=f"email_sub_{cand_id}")
+                                    email_body = st.text_area("Custom Email Message (Optional)", key=f"email_body_{cand_id}")
+                                    
+                                    comm_col1, comm_col2, comm_col3 = st.columns(3)
+                                    with comm_col1:
+                                        if st.button("Send Shortlist", key=f"send_shortlist_{cand_id}", use_container_width=True):
+                                            payload = {"candidate_id": cand_id}
+                                            if email_subject: payload["subject"] = email_subject
+                                            if email_body: payload["message"] = email_body
+                                            
+                                            with st.spinner("Sending shortlist email..."):
+                                                mail_res = api_request("POST", "/send-shortlist", json=payload)
+                                            if mail_res and mail_res.status_code == 200:
+                                                st.success("✉️ Shortlist email sent successfully! Status updated to Shortlisted.")
+                                                st.toast("Shortlist email sent!", icon="✉️")
+                                                time.sleep(1.0)
+                                                st.rerun()
+                                            elif mail_res:
+                                                st.error(f"Failed to send shortlist email: {mail_res.json().get('detail', 'Unknown error')}")
+                                                
+                                    with comm_col2:
+                                        if st.button("Send Interview", key=f"send_invitation_{cand_id}", use_container_width=True):
+                                            payload = {"candidate_id": cand_id}
+                                            if email_subject: payload["subject"] = email_subject
+                                            if email_body: payload["message"] = email_body
+                                            
+                                            with st.spinner("Sending interview invitation email..."):
+                                                mail_res = api_request("POST", "/send-interview", json=payload)
+                                            if mail_res and mail_res.status_code == 200:
+                                                st.success("✉️ Interview invitation sent successfully!")
+                                                st.toast("Interview email sent!", icon="✉️")
+                                            elif mail_res:
+                                                st.error(f"Failed to send interview invitation: {mail_res.json().get('detail', 'Unknown error')}")
+                                                
+                                    with comm_col3:
+                                        if st.button("Send Rejection", key=f"send_rejection_{cand_id}", use_container_width=True):
+                                            payload = {"candidate_id": cand_id}
+                                            if email_subject: payload["subject"] = email_subject
+                                            if email_body: payload["message"] = email_body
+                                            
+                                            with st.spinner("Sending rejection email..."):
+                                                mail_res = api_request("POST", "/send-rejection", json=payload)
+                                            if mail_res and mail_res.status_code == 200:
+                                                st.success("✉️ Rejection email sent successfully! Status updated to Rejected.")
+                                                st.toast("Rejection email sent!", icon="✉️")
+                                                time.sleep(1.0)
+                                                st.rerun()
+                                            elif mail_res:
+                                                st.error(f"Failed to send rejection email: {mail_res.json().get('detail', 'Unknown error')}")
+                                                
+                                    st.markdown("---")
+                                    st.markdown("### Compatibility Check")
                                     if not jobs:
-                                        st.warning("No jobs defined yet. Create a job first to test score calculation.")
+                                        st.caption("No jobs defined.")
                                     else:
-                                        # Select Job
                                         job_opts = {j['title']: j['id'] for j in jobs}
-                                        selected_job_title = st.selectbox("Select Job Target", list(job_opts.keys()), key=f"job_sel_{row['id']}")
+                                        selected_job_title = st.selectbox("Job Target", list(job_opts.keys()), key=f"job_sel_{cand_id}")
                                         job_id = job_opts[selected_job_title]
                                         
-                                        if st.button("Calculate Compatibility", key=f"calc_btn_{row['id']}"):
-                                            # Call Score endpoint
-                                            score_res = api_request("GET", f"/score?candidate_id={row['id']}&job_id={job_id}")
+                                        if st.button("Run Compatibility Match", key=f"calc_btn_{cand_id}"):
+                                            with st.spinner("Calculating compatibility..."):
+                                                score_res = api_request("GET", f"/score?candidate_id={cand_id}&job_id={job_id}")
                                             if score_res and score_res.status_code == 200:
                                                 score_data = score_res.json()
                                                 match_score = score_data["match_score"]
                                                 details = score_data["details"]
                                                 
-                                                # Gauge chart
                                                 fig_gauge = go.Figure(go.Indicator(
                                                     mode = "gauge+number",
                                                     value = match_score,
                                                     domain = {'x': [0, 1], 'y': [0, 1]},
-                                                    title = {'text': "Compatibility Score", 'font': {'size': 18}},
+                                                    title = {'text': "Compatibility Score", 'font': {'size': 16}},
                                                     gauge = {
                                                         'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
                                                         'bar': {'color': "#4F46E5"},
@@ -476,12 +726,11 @@ else:
                                                 fig_gauge.update_layout(
                                                     paper_bgcolor="rgba(0,0,0,0)", 
                                                     font_color="#E5E7EB", 
-                                                    height=180, 
-                                                    margin=dict(l=10, r=10, t=40, b=10)
+                                                    height=160, 
+                                                    margin=dict(l=10, r=10, t=30, b=10)
                                                 )
                                                 st.plotly_chart(fig_gauge, use_container_width=True)
                                                 
-                                                # Matched / Missing skills listing
                                                 col_skills1, col_skills2 = st.columns(2)
                                                 with col_skills1:
                                                     st.markdown("✅ **Matched Skills**")
@@ -496,20 +745,19 @@ else:
                                                     else:
                                                         st.caption("None missing")
                                                         
-                                                # Experience gap info
                                                 gap = details["experience_gap"]
                                                 if gap > 0:
-                                                    st.warning(f"⚠️ Experience gap detected: Candidate lacks **{gap} years** of experience for this role.")
+                                                    st.warning(f"⚠️ Experience gap: Candidate lacks **{gap} years** of experience.")
                                                 else:
-                                                    st.success("✅ Experience requirements fully met!")
-                                                    
+                                                    st.success("✅ Experience requirements met!")
                                             elif score_res:
-                                                st.error(f"Scoring failed: {score_res.json().get('detail', 'Unknown error')}")
-                                
-                                # Full CV drawer
+                                                st.error("Scoring failed.")
+                                                
                                 with st.container():
                                     st.markdown("### Raw Resume Text")
-                                    st.text_area("Full Extracted text", value=row['resume_text'], height=200, disabled=True, key=f"raw_cv_{row['id']}")
+                                    st.text_area("Full Extracted text", value=row['resume_text'], height=150, disabled=True, key=f"raw_cv_{cand_id}")
+            else:
+                st.error("Failed to fetch candidate list.")
 
     # UPLOAD RESUME PAGE
     elif choice == "Upload Resume":
@@ -560,9 +808,32 @@ else:
                         
                         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
                         
-                        with st.spinner("Processing resume & running AI Matcher..."):
-                            # Send to backend
-                            res = api_request("POST", f"/upload_resume?job_id={job_id}", files=files)
+                        # Premium simulated progress bar during uploading and processing
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        # Stage 1: Uploading
+                        status_text.info("📤 Step 1/4: Uploading resume file to server...")
+                        time.sleep(0.3)
+                        progress_bar.progress(25)
+                        
+                        # Stage 2: Extracting Text
+                        status_text.info("📄 Step 2/4: Reading document content and extracting text...")
+                        time.sleep(0.4)
+                        progress_bar.progress(50)
+                        
+                        # Stage 3: Matching
+                        status_text.info("🤖 Step 3/4: Invoking AI Matcher to score candidate compatibility...")
+                        time.sleep(0.4)
+                        progress_bar.progress(75)
+                        
+                        # Stage 4: Fetching API
+                        status_text.info("💾 Step 4/4: Saving parsed data & generating match recommendation...")
+                        
+                        res = api_request("POST", f"/upload_resume?job_id={job_id}", files=files)
+                        
+                        progress_bar.progress(100)
+                        status_text.empty()
                             
                             if res is not None:
                                 if res.status_code == 201:
@@ -639,6 +910,123 @@ else:
                                         </p>
                                     </div>
                                 """, unsafe_allow_html=True)
+
+    # SCHEDULE INTERVIEW PAGE
+    elif choice == "Schedule Interview":
+        st.title("📅 Schedule Interview Panel")
+        st.markdown("---")
+        
+        # Load Candidates and Jobs from backend
+        with st.spinner("Fetching candidates and jobs..."):
+            cand_res = api_request("GET", "/candidates-with-details")
+            job_res = api_request("GET", "/job")
+            
+        if cand_res is not None and job_res is not None:
+            if cand_res.status_code == 200 and job_res.status_code == 200:
+                candidates = cand_res.json()
+                jobs = job_res.json()
+                
+                # Filter candidates to "Shortlisted" candidates
+                shortlisted_cands = [c for c in candidates if c.get("status") == "Shortlisted"]
+                
+                if not shortlisted_cands:
+                    st.warning("⚠️ No Shortlisted Candidates: Currently, there are no candidates with status 'Shortlisted'. Please shortlist candidates first.")
+                    st.info("You can shortlist candidates via the 'Candidates List' page using the 'Send Shortlist' button or updating their status manually.")
+                    
+                    # Fallback option to allow scheduling for other candidates
+                    show_all = st.checkbox("Show all candidates as fallback")
+                    if show_all:
+                        shortlisted_cands = candidates
+                    else:
+                        st.stop()
+                        
+                # Create dropdown of candidates
+                cand_opts = {c['name']: c for c in shortlisted_cands}
+                selected_cand_name = st.selectbox("Candidate Name", list(cand_opts.keys()))
+                selected_candidate = cand_opts[selected_cand_name]
+                
+                st.info(f"Scheduling interview for **{selected_candidate['name']}** (Current Status: **{selected_candidate['status']}**).")
+                
+                # Fields
+                col_field1, col_field2 = st.columns(2)
+                with col_field1:
+                    interview_date = st.date_input("Interview Date")
+                with col_field2:
+                    interview_time = st.time_input("Interview Time")
+                    
+                col_field3, col_field4 = st.columns(2)
+                with col_field3:
+                    interviewer_name = st.text_input("Interviewer Name", placeholder="Enter interviewer full name...")
+                with col_field4:
+                    interviewer_email = st.text_input("Interviewer Email", placeholder="Enter interviewer email address...")
+                    
+                col_field5, col_field6 = st.columns(2)
+                with col_field5:
+                    platform = st.selectbox("Platform", ["Google Meet", "Microsoft Teams", "Zoom"])
+                with col_field6:
+                    meeting_link = st.text_input("Meeting Link (Autofilled / Editable)", placeholder="Generated meeting link...")
+                    
+                # Prefill meeting link based on platform
+                # If meeting_link is empty, automatically prefill it when platform changes
+                import uuid
+                mock_id = str(uuid.uuid4())[:8]
+                if not meeting_link:
+                    if platform == "Google Meet":
+                        meeting_link = f"https://meet.google.com/abc-{mock_id}-xyz"
+                    elif platform == "Microsoft Teams":
+                        meeting_link = f"https://teams.microsoft.com/l/meetup-join/19%3ameeting_{mock_id}%40thread.v2/0"
+                    elif platform == "Zoom":
+                        meeting_link = f"https://zoom.us/j/{uuid.uuid4().fields[0]}"
+                        
+                notes = st.text_area("Notes / Special Instructions (Optional)")
+                
+                if st.button("Schedule Interview", type="primary", use_container_width=True):
+                    if not interviewer_name or not interviewer_email:
+                        st.warning("Please fill out both Interviewer Name and Interviewer Email.")
+                        st.stop()
+                        
+                    # Find candidate's matched job ID
+                    job_id = selected_candidate.get("primary_job_id")
+                    if not job_id:
+                        if jobs:
+                            job_id = jobs[0]['id']
+                            st.caption(f"No specific job match found in Candidate record. Defaulting to job: **{jobs[0]['title']}**")
+                        else:
+                            st.error("No Job Requirements defined in database. Cannot schedule interview without a job.")
+                            st.stop()
+                            
+                    # Construct datetime ISO string
+                    import datetime
+                    combined_dt = datetime.datetime.combine(interview_date, interview_time)
+                    scheduled_time_str = combined_dt.isoformat()
+                    
+                    # Call POST /interview
+                    payload = {
+                        "candidate_id": selected_candidate['id'],
+                        "job_id": job_id,
+                        "interviewer_name": interviewer_name,
+                        "interviewer_email": interviewer_email,
+                        "scheduled_time": scheduled_time_str,
+                        "duration_minutes": 45,
+                        "mode": "Online",
+                        "meeting_link": meeting_link,
+                        "notes": notes
+                    }
+                    
+                    with st.spinner("Registering interview and updating candidate status..."):
+                        sch_res = api_request("POST", "/interview", json=payload)
+                        
+                    if sch_res is not None:
+                        if sch_res.status_code == 201:
+                            st.success(f"🎉 Interview successfully scheduled for **{selected_candidate['name']}** on **{interview_date}** at **{interview_time}**!")
+                            st.info(f"Platform: **{platform}** | Link: [Join Interview]({meeting_link})")
+                            st.toast("Interview scheduled successfully!", icon="🎉")
+                            time.sleep(1.0)
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to schedule interview: {sch_res.json().get('detail', 'Unknown error')}")
+            else:
+                st.error("Failed to load candidates/jobs for scheduling.")
 
     # ADMIN PAGE (UI MOCK ONLY FOR NOW)
     elif choice == "Admin Settings":
@@ -742,28 +1130,80 @@ else:
             else:
                 candidate = candidates[0]
                 
-                # Visual Application Status Step Tracker
-                st.subheader("🎯 Application Status")
+                # Visual Application Journey Tracker
+                st.subheader("🎯 Application Journey Tracker")
                 status = candidate.get("status", "Applied")
-                status_steps = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
                 
-                try:
-                    current_idx = status_steps.index(status)
-                except ValueError:
-                    current_idx = 0
+                stages = [
+                    "Resume Uploaded",
+                    "Resume Parsed",
+                    "Job Matched",
+                    "Shortlisted",
+                    "Interview Scheduled",
+                    "Selected",
+                    "Offer Released"
+                ]
                 
-                # Render visual progress bar
-                cols = st.columns(len(status_steps))
-                for idx, step in enumerate(status_steps):
-                    with cols[idx]:
-                        if idx < current_idx:
-                            st.markdown(f"<div style='text-align: center; color: #10B981; font-weight: bold;'>✅ {step}</div>", unsafe_allow_html=True)
-                        elif idx == current_idx:
-                            st.markdown(f"<div style='text-align: center; color: #3B82F6; font-weight: bold; border: 2px solid #3B82F6; border-radius: 8px; padding: 4px;'>🔵 {step}</div>", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"<div style='text-align: center; color: #6B7280;'>⚪ {step}</div>", unsafe_allow_html=True)
+                status_mapping = {
+                    "Applied": 0,
+                    "Screening": 0,
+                    "Parsed": 1,
+                    "Matched": 2,
+                    "Shortlisted": 3,
+                    "Interview Scheduled": 4,
+                    "Interview": 4,
+                    "Selected": 5,
+                    "Offer Released": 6
+                }
+                current_idx = status_mapping.get(status, 0)
                 
-                st.progress((current_idx + 1) / len(status_steps))
+                # Render visual timeline using html/css
+                timeline_html = """
+                <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto;">
+                """
+                for idx, stage in enumerate(stages):
+                    is_completed = idx < current_idx
+                    is_current = idx == current_idx
+                    
+                    if status == "Rejected" and idx == current_idx:
+                        icon = "❌"
+                        bg = "rgba(239, 68, 68, 0.2)"
+                        text = "#F87171"
+                        border = "rgba(239, 68, 68, 0.4)"
+                        stage_text = "Rejected"
+                    elif is_completed:
+                        icon = "✅"
+                        bg = "rgba(16, 185, 129, 0.15)"
+                        text = "#34D399"
+                        border = "rgba(16, 185, 129, 0.3)"
+                        stage_text = stage
+                    elif is_current:
+                        icon = "🔵"
+                        bg = "rgba(79, 70, 229, 0.2)"
+                        text = "#818CF8"
+                        border = "rgba(79, 70, 229, 0.5)"
+                        stage_text = stage
+                    else:
+                        icon = "⚪"
+                        bg = "rgba(255, 255, 255, 0.02)"
+                        text = "#6B7280"
+                        border = "rgba(255, 255, 255, 0.05)"
+                        stage_text = stage
+                        
+                    timeline_html += f"""
+                    <div style="flex: 1; min-width: 100px; text-align: center; padding: 6px; margin: 0 4px; background: {bg}; border: 1px solid {border}; border-radius: 6px; color: {text}; font-size: 11px; font-weight: 600;">
+                        <div style="font-size: 14px; margin-bottom: 2px;">{icon}</div>
+                        <div>{stage_text}</div>
+                    </div>
+                    """
+                    if idx < len(stages) - 1:
+                        line_color = "rgba(16, 185, 129, 0.5)" if idx < current_idx else "rgba(255, 255, 255, 0.1)"
+                        timeline_html += f"""
+                        <div style="flex: 0.1; height: 2px; min-width: 10px; background-color: {line_color}; margin: 0 -4px;"></div>
+                        """
+                timeline_html += "</div>"
+                st.markdown(timeline_html, unsafe_allow_html=True)
+                st.progress((current_idx + 1) / len(stages))
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 

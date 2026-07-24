@@ -107,9 +107,81 @@ def list_all_candidates(
     List all candidates in the database.
     """
     if _current_user.role == "Candidate":
-        c = db.query(Candidate).filter(Candidate.email == _current_user.username).all()
-        return c
+        return db.query(Candidate).filter(Candidate.email == _current_user.username).all()
     return db.query(Candidate).all()
+
+
+@router.get("/candidates-with-details", response_model=List[dict])
+def list_candidates_with_details(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(any_auth_checker)
+):
+    """
+    Get all candidates with their associated match scores, recommendations, and jobs.
+    """
+    logger.info(f"Retrieving all candidates with details. Performed by user: {current_user.username}")
+    
+    # Query Candidate, CandidateScore, Job, and Recommendation
+    # Since a candidate can have multiple scores, we retrieve them
+    results = db.query(
+        Candidate,
+        CandidateScore.match_score,
+        CandidateScore.job_id,
+        Job.title.label("job_title"),
+        Recommendation.recommendation
+    ).outerjoin(
+        CandidateScore, Candidate.id == CandidateScore.candidate_id
+    ).outerjoin(
+        Job, CandidateScore.job_id == Job.id
+    ).outerjoin(
+        Recommendation, (Candidate.id == Recommendation.candidate_id) & (CandidateScore.job_id == Recommendation.job_id)
+    ).all()
+    
+    candidates_map = {}
+    for cand, score, job_id, job_title, rec in results:
+        if cand.id not in candidates_map:
+            candidates_map[cand.id] = {
+                "id": cand.id,
+                "name": cand.name,
+                "email": cand.email,
+                "phone": cand.phone,
+                "education": cand.education,
+                "experience": cand.experience,
+                "skills": cand.skills,
+                "projects": cand.projects,
+                "notice_period": cand.notice_period,
+                "expected_ctc": cand.expected_ctc,
+                "location": cand.location,
+                "resume_text": cand.resume_text,
+                "status": cand.status,
+                "created_at": cand.created_at.isoformat() if cand.created_at else None,
+                "job_matches": []
+            }
+        if job_id is not None:
+            candidates_map[cand.id]["job_matches"].append({
+                "job_id": job_id,
+                "job_title": job_title,
+                "match_score": score,
+                "recommendation": rec or "Applied"
+            })
+    
+    cands_list = []
+    for c_id, c_data in candidates_map.items():
+        # Find best match or first match
+        best_match = None
+        if c_data["job_matches"]:
+            best_match = max(c_data["job_matches"], key=lambda x: x["match_score"])
+        
+        c_data["primary_job_id"] = best_match["job_id"] if best_match else None
+        c_data["primary_job_title"] = best_match["job_title"] if best_match else "N/A"
+        c_data["match_percentage"] = best_match["match_score"] if best_match else 0.0
+        c_data["recommendation"] = best_match["recommendation"] if best_match else "Applied"
+        cands_list.append(c_data)
+        
+    if current_user.role == "Candidate":
+        return [c for c in cands_list if c["email"] == current_user.username]
+        
+    return cands_list
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateResponse)

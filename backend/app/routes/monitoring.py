@@ -4,7 +4,7 @@ from sqlalchemy import func
 import logging
 
 from app.database import get_db
-from app.models import User, Candidate, Job, Interview, CandidateScore
+from app.models import User, Candidate, Job, Interview, CandidateScore, Recommendation
 from app.schemas import HealthResponse, StatusResponse, MetricsResponse
 from app.services.redis_cache import redis_client
 
@@ -95,3 +95,71 @@ def get_recruitment_metrics(db: Session = Depends(get_db)):
         total_interviews=total_interviews,
         total_scores=total_scores
     )
+
+
+@router.get("/analytics", response_model=dict, status_code=status.HTTP_200_OK)
+def get_analytics(db: Session = Depends(get_db)):
+    """
+    Retrieve comprehensive recruitment statistics and dataset representations for dashboard charts.
+    """
+    logger.info("Computing recruitment dashboard analytics.")
+    
+    total_candidates = db.query(func.count(Candidate.id)).scalar() or 0
+    shortlisted_candidates = db.query(func.count(Candidate.id)).filter(Candidate.status == "Shortlisted").scalar() or 0
+    rejected_candidates = db.query(func.count(Candidate.id)).filter(Candidate.status == "Rejected").scalar() or 0
+    
+    # Compute average match score over all candidate score evaluations
+    avg_match = db.query(func.avg(CandidateScore.match_score)).scalar()
+    average_match_percentage = round(float(avg_match), 1) if avg_match is not None else 0.0
+    
+    # Pending interviews are scheduled ones
+    pending_interviews = db.query(func.count(Interview.id)).filter(Interview.status == "Scheduled").scalar() or 0
+    
+    # Get all match scores for Match Percentage Distribution
+    scores = db.query(CandidateScore.match_score).all()
+    match_percentages = [float(s[0]) for s in scores]
+    
+    # Group recommendation count (Shortlist, Maybe, Reject)
+    recs = db.query(Recommendation.recommendation, func.count(Recommendation.id)).group_by(Recommendation.recommendation).all()
+    recommendation_counts = {r[0]: r[1] for r in recs}
+    
+    # Parse candidate skills list to count skill frequencies
+    candidates = db.query(Candidate.skills).all()
+    skills_counts = {}
+    for c in candidates:
+        if c[0] and isinstance(c[0], list):
+            for skill in c[0]:
+                skill_clean = skill.strip()
+                if skill_clean:
+                    skill_title = skill_clean.title()
+                    skills_counts[skill_title] = skills_counts.get(skill_title, 0) + 1
+                    
+    # Return top 15 skills
+    sorted_skills = sorted(skills_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+    skills_distribution = {k: v for k, v in sorted_skills}
+    
+    # Hiring funnel counts: Applied -> Parsed -> Matched -> Shortlisted -> Interview -> Selected
+    status_counts_raw = db.query(Candidate.status, func.count(Candidate.id)).group_by(Candidate.status).all()
+    status_counts = {s[0]: s[1] for s in status_counts_raw}
+    
+    # Funnel stages: Applied, Parsed, Matched, Shortlisted, Interview, Selected
+    funnel = {
+        "Applied": status_counts.get("Applied", 0) + status_counts.get("Screening", 0),
+        "Parsed": status_counts.get("Parsed", 0),
+        "Matched": status_counts.get("Matched", 0),
+        "Shortlisted": status_counts.get("Shortlisted", 0),
+        "Interview": status_counts.get("Interview Scheduled", 0) + status_counts.get("Interview", 0),
+        "Selected": status_counts.get("Selected", 0)
+    }
+    
+    return {
+        "total_candidates": total_candidates,
+        "shortlisted_candidates": shortlisted_candidates,
+        "rejected_candidates": rejected_candidates,
+        "average_match_percentage": average_match_percentage,
+        "pending_interviews": pending_interviews,
+        "match_percentages": match_percentages,
+        "recommendation_counts": recommendation_counts,
+        "skills_distribution": skills_distribution,
+        "hiring_funnel": funnel
+    }
