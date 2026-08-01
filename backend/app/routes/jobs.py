@@ -25,7 +25,7 @@ def serialize_job(j: Job) -> dict:
         "description": j.description,
         "requirements": j.requirements,
         "experience_required": j.experience_required,
-        "created_at": j.created_at.isoformat() if j.created_at else None
+        "created_at": j.created_at.isoformat() if j.created_at is not None else None
     }
 
 @router.post("/job", response_model=JobResponse, status_code=status.HTTP_201_CREATED)

@@ -92,6 +92,8 @@ class CandidateResponse(BaseModel):
     resume_text: Optional[str] = None
     status: str
     created_at: datetime
+    ai_summary: Optional[str] = None
+    resume_hash: Optional[str] = None
 
 class CandidateStatusUpdate(BaseModel):
     status: str
@@ -108,6 +110,7 @@ class ScoreResponse(BaseModel):
     job_id: int
     match_score: float
     details: MatchDetails
+    skill_gap_report: Optional[dict] = None
 
 class UploadResumeResponse(BaseModel):
     candidate: str
@@ -127,6 +130,9 @@ class UploadResumeResponse(BaseModel):
     notice_period: Optional[str] = None
     expected_ctc: Optional[str] = None
     status: Optional[str] = None
+    ai_summary: Optional[str] = None
+    resume_hash: Optional[str] = None
+
 
 # --- Interview Schemas ---
 class InterviewCreate(BaseModel):
@@ -212,6 +218,133 @@ class MetricsResponse(BaseModel):
     total_jobs: int
     total_interviews: int
     total_scores: int
+
+# --- New Table & AI Responses Schemas ---
+
+class InterviewQuestionCreate(BaseModel):
+    candidate_id: int
+    job_id: int
+    question: str
+    expected_answer: Optional[str] = None
+    category: Optional[str] = "Technical"
+
+class InterviewQuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    candidate_id: int
+    job_id: int
+    question: str
+    expected_answer: Optional[str] = None
+    category: Optional[str] = None
+    created_at: datetime
+
+class InterviewSlotCreate(BaseModel):
+    interviewer_name: str
+    interviewer_email: EmailStr
+    start_time: datetime
+    end_time: datetime
+
+class InterviewSlotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    interviewer_name: str
+    interviewer_email: EmailStr
+    start_time: datetime
+    end_time: datetime
+    is_booked: bool
+    interview_id: Optional[int] = None
+
+class SlotBookRequest(BaseModel):
+    candidate_id: int
+    job_id: int
+
+# --- AI API Responses ---
+
+class AISummaryResponse(BaseModel):
+    candidate_id: int
+    name: str
+    ai_summary: str
+
+class SkillGapResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    matched_skills: List[str]
+    missing_skills: List[str]
+    experience_gap: int
+    recommendations: List[str]
+
+class InterviewQuestionsResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    questions: List[InterviewQuestionResponse]
+
+class ExplainableRecommendationResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    recommendation: str
+    strengths: List[str]
+    weaknesses: List[str]
+    justification: str
+
+class SemanticMatchResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    semantic_score: float
+    matching_highlights: List[str]
+
+# --- Analytics Response Schemas ---
+
+class LocationDistributionResponse(BaseModel):
+    location_distribution: dict
+
+class ExperienceDistributionResponse(BaseModel):
+    experience_distribution: dict
+
+class EducationDistributionResponse(BaseModel):
+    education_distribution: dict
+
+class FunnelResponse(BaseModel):
+    hiring_funnel: dict
+
+class DiversityResponse(BaseModel):
+    gender_distribution: dict
+    university_distribution: dict
+
+# --- Recruitment Tools Response Schemas ---
+
+class ResumeScreeningResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    passed_screening: bool
+    experience_check: bool
+    skills_match_percentage: float
+    reasons: List[str]
+
+class AssessmentQuestion(BaseModel):
+    question: str
+    category: str
+    difficulty: str
+
+class AssessmentGenerateResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    test_id: str
+    assessment_questions: List[AssessmentQuestion]
+
+class AssessmentEvaluateRequest(BaseModel):
+    candidate_id: int
+    job_id: int
+    answers: List[dict] # List of {"question": "...", "answer": "..."}
+
+class AssessmentEvaluateResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    score: float
+    passed: bool
+    evaluation_summary: str
+
 
 
 

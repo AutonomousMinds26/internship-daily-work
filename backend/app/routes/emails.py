@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime, timezone
+from typing import cast, Any, Optional
 
 from app.database import get_db
 from app.models import Candidate, CandidateHistory
@@ -15,7 +16,7 @@ router = APIRouter(tags=["emails"])
 
 recruiter_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
 
-def log_candidate_history(db: Session, candidate_id: int, action: str, details: str = None, performed_by: str = None):
+def log_candidate_history(db: Session, candidate_id: int, action: str, details: Optional[str] = None, performed_by: Optional[str] = None):
     try:
         history = CandidateHistory(
             candidate_id=candidate_id,
@@ -55,24 +56,24 @@ def send_shortlist_email(
     logger.info(f"Sending shortlist email to {candidate.email}")
     
     # Update candidate status
-    old_status = candidate.status
-    candidate.status = "Shortlisted"
+    old_status = str(candidate.status)
+    cast(Any, candidate).status = "Shortlisted"
     db.commit()
 
-    invalidate_candidate(candidate.id)
+    invalidate_candidate(int(cast(Any, candidate.id)))
     log_candidate_history(
         db,
-        candidate.id,
+        int(cast(Any, candidate.id)),
         "Shortlist Email Sent",
         f"Subject: {subject} | Updated status from {old_status} to Shortlisted",
-        current_user.username
+        str(current_user.username)
     )
 
     return EmailResponse(
         success=True,
-        candidate_id=candidate.id,
+        candidate_id=int(cast(Any, candidate.id)),
         email_type="Shortlist",
-        recipient=candidate.email,
+        recipient=str(candidate.email),
         message=body,
         timestamp=datetime.now(timezone.utc)
     )
@@ -105,17 +106,17 @@ def send_interview_email(
 
     log_candidate_history(
         db,
-        candidate.id,
+        int(cast(Any, candidate.id)),
         "Interview Email Sent",
         f"Subject: {subject}",
-        current_user.username
+        str(current_user.username)
     )
 
     return EmailResponse(
         success=True,
-        candidate_id=candidate.id,
+        candidate_id=int(cast(Any, candidate.id)),
         email_type="Interview Invitation",
-        recipient=candidate.email,
+        recipient=str(candidate.email),
         message=body,
         timestamp=datetime.now(timezone.utc)
     )
@@ -147,25 +148,24 @@ def send_rejection_email(
     logger.info(f"Sending rejection email to {candidate.email}")
 
     # Update candidate status
-    old_status = candidate.status
-    candidate.status = "Rejected"
+    old_status = str(candidate.status)
+    cast(Any, candidate).status = "Rejected"
     db.commit()
 
-    invalidate_candidate(candidate.id)
+    invalidate_candidate(int(cast(Any, candidate.id)))
     log_candidate_history(
         db,
-        candidate.id,
+        int(cast(Any, candidate.id)),
         "Rejection Email Sent",
         f"Subject: {subject} | Updated status from {old_status} to Rejected",
-        current_user.username
+        str(current_user.username)
     )
 
     return EmailResponse(
         success=True,
-        candidate_id=candidate.id,
+        candidate_id=int(cast(Any, candidate.id)),
         email_type="Rejection",
-        recipient=candidate.email,
+        recipient=str(candidate.email),
         message=body,
         timestamp=datetime.now(timezone.utc)
     )
-

@@ -3,11 +3,13 @@
     {
       "root": "backend",
       "extraPaths": [
-        "backend"
+        "backend",
+        "backend/AI"
       ]
     }
   ],
   "extraPaths": [
-    "backend"
+    "backend",
+    "backend/AI"
   ]
 }

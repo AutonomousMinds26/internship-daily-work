@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -31,11 +31,16 @@ class Candidate(Base):
     status = Column(String, default="Applied", nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Extended database enhancement fields
+    ai_summary = Column(Text, nullable=True)
+    resume_hash = Column(String, unique=True, index=True, nullable=True)
+
     resumes = relationship("Resume", back_populates="candidate", cascade="all, delete-orphan")
     scores = relationship("CandidateScore", back_populates="candidate", cascade="all, delete-orphan")
     recommendations = relationship("Recommendation", back_populates="candidate", cascade="all, delete-orphan")
     interviews = relationship("Interview", back_populates="candidate", cascade="all, delete-orphan")
     histories = relationship("CandidateHistory", back_populates="candidate", cascade="all, delete-orphan")
+    interview_questions = relationship("InterviewQuestion", back_populates="candidate", cascade="all, delete-orphan")
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -50,6 +55,7 @@ class Job(Base):
     scores = relationship("CandidateScore", back_populates="job", cascade="all, delete-orphan")
     recommendations = relationship("Recommendation", back_populates="job", cascade="all, delete-orphan")
     interviews = relationship("Interview", back_populates="job", cascade="all, delete-orphan")
+    interview_questions = relationship("InterviewQuestion", back_populates="job", cascade="all, delete-orphan")
 
 class Resume(Base):
     __tablename__ = "resumes"
@@ -61,6 +67,9 @@ class Resume(Base):
     raw_text = Column(Text, nullable=True)
     parsed_data = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Extended database enhancement fields
+    embedding = Column(JSON, nullable=True) # Stored as JSON list of floats
 
     candidate = relationship("Candidate", back_populates="resumes")
 
@@ -75,6 +84,9 @@ class CandidateScore(Base):
     missing_skills = Column(JSON, default=[])
     experience_gap = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Extended database enhancement fields
+    skill_gap_report = Column(JSON, nullable=True)
 
     candidate = relationship("Candidate", back_populates="scores")
     job = relationship("Job", back_populates="scores")
@@ -110,8 +122,13 @@ class Interview(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Extended database enhancement fields
+    calendar_event_id = Column(String, nullable=True)
+    calendar_invite = Column(Text, nullable=True)
+
     candidate = relationship("Candidate", back_populates="interviews")
     job = relationship("Job", back_populates="interviews")
+    slots = relationship("InterviewSlot", back_populates="interview", cascade="all, delete-orphan")
 
 class CandidateHistory(Base):
     __tablename__ = "candidate_history"
@@ -125,3 +142,29 @@ class CandidateHistory(Base):
 
     candidate = relationship("Candidate", back_populates="histories")
 
+class InterviewQuestion(Base):
+    __tablename__ = "interview_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    expected_answer = Column(Text, nullable=True)
+    category = Column(String, nullable=True) # Technical, Behavioral, Scenario
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    candidate = relationship("Candidate", back_populates="interview_questions")
+    job = relationship("Job", back_populates="interview_questions")
+
+class InterviewSlot(Base):
+    __tablename__ = "interview_slots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    interviewer_name = Column(String, nullable=False)
+    interviewer_email = Column(String, nullable=False)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    is_booked = Column(Boolean, default=False)
+    interview_id = Column(Integer, ForeignKey("interviews.id", ondelete="SET NULL"), nullable=True)
+
+    interview = relationship("Interview", back_populates="slots")

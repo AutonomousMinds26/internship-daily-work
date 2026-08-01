@@ -10,7 +10,8 @@ from app.database import get_db
 from app.models import Candidate, Job, CandidateScore, Recommendation, CandidateHistory, Resume
 from app.schemas import (
     CandidateCreate, CandidateUpdate, CandidateResponse, 
-    ScoreResponse, MatchDetails, CandidateStatusUpdate, UploadResumeResponse
+    ScoreResponse, MatchDetails, CandidateStatusUpdate, UploadResumeResponse,
+    CandidateHistoryResponse
 )
 from app.auth import RoleChecker, get_current_user, User
 from app.services.extractor import extract_candidate_info
@@ -61,7 +62,7 @@ def serialize_candidate(c: Candidate) -> dict:
         "location": c.location,
         "resume_text": c.resume_text,
         "status": c.status,
-        "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat()
+        "created_at": c.created_at.isoformat() if c.created_at is not None else datetime.now(timezone.utc).isoformat()
 
     }
 
@@ -106,8 +107,9 @@ def list_all_candidates(
     """
     List all candidates in the database.
     """
-    if _current_user.role == "Candidate":
-        return db.query(Candidate).filter(Candidate.email == _current_user.username).all()
+    current_user_any = cast(Any, _current_user)
+    if current_user_any.role == "Candidate":
+        return db.query(Candidate).filter(Candidate.email == current_user_any.username).all()
     return db.query(Candidate).all()
 
 
@@ -178,8 +180,9 @@ def list_candidates_with_details(
         c_data["recommendation"] = best_match["recommendation"] if best_match else "Applied"
         cands_list.append(c_data)
         
-    if current_user.role == "Candidate":
-        return [c for c in cands_list if c["email"] == current_user.username]
+    current_user_any = cast(Any, current_user)
+    if current_user_any.role == "Candidate":
+        return [c for c in cands_list if c["email"] == current_user_any.username]
         
     return cands_list
 
@@ -195,8 +198,9 @@ def get_candidate_by_id(
     Get a single candidate by path parameter ID.
     """
     cached_cand = get_cached_candidate(candidate_id)
+    current_user_any = cast(Any, current_user)
     if cached_cand:
-        if current_user.role == "Candidate" and cached_cand["email"] != current_user.username:
+        if current_user_any.role == "Candidate" and cached_cand["email"] != current_user_any.username:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
         return cached_cand
 
@@ -204,7 +208,8 @@ def get_candidate_by_id(
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Candidate with ID {candidate_id} not found.")
 
-    if current_user.role == "Candidate" and candidate.email != current_user.username:
+    current_user_any = cast(Any, current_user)
+    if current_user_any.role == "Candidate" and str(candidate.email) != current_user_any.username:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     cache_candidate(candidate_id, serialize_candidate(candidate))
@@ -317,7 +322,7 @@ async def upload_resume(
             contents = await file.read()
             doc = fitz.open(stream=contents, filetype="pdf")
             for page in doc:
-                text += page.get_text()
+                text += str(page.get_text())
             doc.close()
         except Exception as e:
             logger.error(f"Failed parsing PDF {file.filename}: {str(e)}")
@@ -347,6 +352,12 @@ async def upload_resume(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The uploaded resume is empty."
         )
+
+    # Calculate SHA-256 resume hash for duplicate detection
+    import hashlib
+    resume_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 
     # 3. Setup path and imports for AI pipeline
     import sys
@@ -409,9 +420,23 @@ async def upload_resume(
 
     candidate_info["experience"] = f"{experience_years} years"
 
+    # Multi-criteria duplicate check (email, phone, hash, semantic similarity)
+    email_val = str(candidate_info.get("email")) if candidate_info.get("email") else ""
+    phone_val = str(candidate_info.get("phone")) if candidate_info.get("phone") else None
+    if email_val and email_val != "Not Available":
+        from app.services.duplicates import check_duplicate_candidate
+        dup_check = check_duplicate_candidate(email_val, phone_val, text, resume_hash, db)
+        if dup_check["is_duplicate"]:
+            logger.warning(f"Duplicate Candidate Detected: {dup_check['reason']}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Duplicate candidate detected. Reason: {dup_check['reason']} (ID: {dup_check['duplicate_id']}, Name: {dup_check['name']})"
+            )
+
+
     # Ensure basic fields are populated
-    email = candidate_info.get("email") or f"unknown_{int(datetime.now(timezone.utc).timestamp())}@recruiterai.com"
-    name = candidate_info.get("name") or "Unknown Candidate"
+    email = str(candidate_info.get("email") or f"unknown_{int(datetime.now(timezone.utc).timestamp())}@recruiterai.com")
+    name = str(candidate_info.get("name") or "Unknown Candidate")
 
 
     # 5. Extract Job Info
@@ -466,6 +491,11 @@ async def upload_resume(
                 "recommendation": rec_val
             }
 
+    # Format match_percentage to integer to satisfy Pydantic Schema
+    if "match_percentage" in match_result:
+        val = float(str(match_result["match_percentage"]))
+        match_result["match_percentage"] = int(val + 0.5)
+
     # Ensure strengths and weaknesses lists exist
     strengths = match_result.get("strengths") or []
     weaknesses = match_result.get("weaknesses") or []
@@ -497,7 +527,8 @@ async def upload_resume(
         "expected_ctc": candidate_info.get("expected_ctc"),
         "location": candidate_info.get("location"),
         "resume_text": text,
-        "status": status_val
+        "status": status_val,
+        "resume_hash": resume_hash
     }
 
     if candidate_db:
@@ -581,11 +612,12 @@ def get_candidate(
     """
     Get all candidates or retrieve a single candidate by query param (uses cache-aside strategy).
     """
-    if _current_user.role == "Candidate":
+    current_user_any = cast(Any, _current_user)
+    if current_user_any.role == "Candidate":
         if id is not None:
             cached_cand = get_cached_candidate(id)
             if cached_cand:
-                if cached_cand["email"] != _current_user.username:
+                if cached_cand["email"] != current_user_any.username:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Access denied to other candidates' profiles."
@@ -599,7 +631,7 @@ def get_candidate(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Candidate with ID {id} not found."
                 )
-            if candidate.email != _current_user.username:
+            if str(candidate.email) != current_user_any.username:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Access denied to other candidates' profiles."
@@ -608,8 +640,8 @@ def get_candidate(
             cache_candidate(id, cand_dict)
             return candidate
         else:
-            logger.info(f"Candidate {_current_user.username} retrieving their own profile.")
-            candidate = db.query(Candidate).filter(Candidate.email == _current_user.username).first()
+            logger.info(f"Candidate {current_user_any.username} retrieving their own profile.")
+            candidate = db.query(Candidate).filter(Candidate.email == current_user_any.username).first()
             return [candidate] if candidate else []
 
     if id is not None:
@@ -666,7 +698,8 @@ def get_score(
         cand_email = candidate.email
         cache_candidate(candidate_id, serialize_candidate(candidate))
 
-    if _current_user.role == "Candidate" and cand_email != _current_user.username:
+    current_user_any = cast(Any, _current_user)
+    if current_user_any.role == "Candidate" and str(cand_email) != current_user_any.username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to other candidates' scores."
@@ -679,8 +712,8 @@ def get_score(
             detail=f"Job with ID {job_id} not found."
         )
 
-    cand_skills_list = cast(list, cand_skills) if cand_skills else []
-    job_reqs_list = cast(list, job.requirements) if job.requirements else []
+    cand_skills_list = cast(list, cand_skills) if cand_skills is not None else []
+    job_reqs_list = cast(list, job.requirements) if job.requirements is not None else []
     cand_exp_val = cast(int, cand_exp) if cand_exp is not None else 0
     job_exp_val = cast(int, job.experience_required) if job.experience_required is not None else 0
 
@@ -754,5 +787,32 @@ def update_candidate_status(
     
     logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
     return candidate
+
+
+@router.get("/candidates/{candidate_id}/history", response_model=List[CandidateHistoryResponse])
+@router.get("/candidate/{candidate_id}/history", response_model=List[CandidateHistoryResponse])
+def get_candidate_history(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(any_auth_checker)
+):
+    """
+    Retrieve candidate journey tracking history.
+    """
+    logger.info(f"Retrieving journey history for candidate {candidate_id}")
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with ID {candidate_id} not found."
+        )
+    
+    current_user_any = cast(Any, _current_user)
+    if current_user_any.role == "Candidate" and str(candidate.email) != current_user_any.username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    history = db.query(CandidateHistory).filter(CandidateHistory.candidate_id == candidate_id).order_by(CandidateHistory.created_at.desc()).all()
+    return history
+
 
 

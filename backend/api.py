@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, cast, Any
 
 import models
 from database import engine, get_db, Base
@@ -122,11 +122,11 @@ def match_candidate(candidate_id: int, job_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     # Match skills and update candidate score in DB
-    match_percentage = calculate_skill_match(candidate.skills, job.required_skills)
+    match_percentage = calculate_skill_match(str(candidate.skills or ""), str(job.required_skills or ""))
     recommendation = get_matching_recommendation(match_percentage)
-
+ 
     # Save calculated score to DB
-    candidate.score = match_percentage
+    cast(Any, candidate).score = match_percentage
     db.commit()
     db.refresh(candidate)
 

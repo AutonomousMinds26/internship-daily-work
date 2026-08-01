@@ -5,11 +5,11 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.database import engine, Base, SessionLocal
+from app.database import engine, Base, SessionLocal, run_db_migrations
 from app.logging_config import setup_logging
 from app.models import User
 from app.auth import get_password_hash
-from app.routes import auth, jobs, candidates, interviews, emails, monitoring
+from app.routes import auth, jobs, candidates, interviews, emails, monitoring, ai, tools
 
 # Initialize logging configuration
 setup_logging()
@@ -45,12 +45,17 @@ def seed_users():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create tables and seed test users
+    # Startup: Create tables, run migrations, and seed test users
     logger.info("Application starting up... Initializing database tables.")
     Base.metadata.create_all(bind=engine)
+    try:
+        run_db_migrations()
+    except Exception as e:
+        logger.error(f"Failed to run database migrations: {str(e)}")
     seed_users()
     logger.info("Database tables initialized and seeded successfully.")
     yield
+
     # Shutdown: Clean up if needed
     logger.info("Application shutting down...")
 
@@ -97,8 +102,9 @@ app.include_router(candidates.router)
 app.include_router(interviews.router)
 app.include_router(emails.router)
 app.include_router(monitoring.router)
+app.include_router(ai.router)
+app.include_router(tools.router)
 
 @app.get("/")
 def home():
     return {"status": "healthy", "service": "RecruiterAI API", "version": "1.0.0"}
-

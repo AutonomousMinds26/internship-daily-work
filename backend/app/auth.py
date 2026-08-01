@@ -46,9 +46,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        username_val = payload.get("sub")
+        if username_val is None:
             raise credentials_exception
+        username: str = str(username_val)
     except JWTError as e:
         logger.warning(f"JWT decode failed: {str(e)}")
         raise credentials_exception

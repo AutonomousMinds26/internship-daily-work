@@ -1,4 +1,5 @@
 import streamlit as st
+from typing import cast, Any
 import requests
 import pandas as pd
 import plotly.express as px
@@ -403,7 +404,7 @@ else:
                 if not candidates:
                     st.info("No candidates found in the database. Head to the Uploader page to add profiles!")
                 else:
-                    df = pd.DataFrame(candidates)
+                    df = cast(Any, pd.DataFrame(candidates))
                     
                     # Search and Filters block
                     with st.container(border=True):

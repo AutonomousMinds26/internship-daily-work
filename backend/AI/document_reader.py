@@ -12,7 +12,7 @@ def read_pdf(file_path):
     text = ""
 
     for page in document:
-        text += page.get_text()
+        text += str(page.get_text())
 
     document.close()
 
