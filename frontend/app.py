@@ -4,8 +4,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import re
 import time
-from datetime import date
+import calendar as cal_module
+from datetime import date, datetime, timedelta
 
 # Page Configuration
 st.set_page_config(
@@ -295,6 +297,95 @@ st.markdown("""
             border-radius: 14px;
             padding: 16px;
         }
+
+        /* AI Insight Card */
+        .ai-insight-card {
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(139, 92, 246, 0.06));
+            border: 1px solid rgba(79, 70, 229, 0.2);
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 14px;
+            transition: all 0.3s ease;
+        }
+        .ai-insight-card:hover {
+            border-color: rgba(79, 70, 229, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.15);
+        }
+
+        /* Question Card */
+        .question-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
+            transition: all 0.25s ease;
+        }
+        .question-card:hover {
+            background: rgba(79, 70, 229, 0.06);
+            border-color: rgba(79, 70, 229, 0.25);
+        }
+
+        /* Comparison Grid */
+        .comparison-col {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 14px;
+            padding: 20px;
+            min-height: 200px;
+        }
+        .comparison-col:hover {
+            border-color: rgba(79, 70, 229, 0.3);
+        }
+        .comparison-winner {
+            border: 2px solid rgba(16, 185, 129, 0.5) !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+        }
+
+        /* Calendar cell */
+        .cal-cell {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 8px;
+            min-height: 80px;
+            font-size: 12px;
+        }
+        .cal-cell-today {
+            border-color: rgba(79, 70, 229, 0.5);
+            background: rgba(79, 70, 229, 0.08);
+        }
+        .cal-event {
+            background: rgba(79, 70, 229, 0.15);
+            border-left: 3px solid #6366F1;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 4px;
+            color: #C7D2FE;
+        }
+
+        /* Diversity metric */
+        .diversity-metric {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(59, 130, 246, 0.06));
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: 12px;
+            padding: 16px 20px;
+            text-align: center;
+        }
+
+        /* Section header */
+        .section-header {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #6366F1;
+            font-weight: 700;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -369,6 +460,116 @@ def score_color(score):
 def platform_icon(platform):
     icons = {"Google Meet": "🟢", "Microsoft Teams": "🔵", "Zoom": "🟣"}
     return icons.get(platform, "📹")
+
+# ─── AI Helper Functions ──────────────────────────────────────────────────────
+def generate_ai_summary(candidate, match_score=None, matched_skills=None, missing_skills=None, experience_gap=None):
+    """Generate a simulated AI summary for a candidate."""
+    name = candidate.get("name", "Candidate") if isinstance(candidate, dict) else str(candidate)
+    skills = candidate.get("skills", []) if isinstance(candidate, dict) else []
+    exp = candidate.get("experience", 0) if isinstance(candidate, dict) else 0
+    education = candidate.get("education", "N/A") if isinstance(candidate, dict) else "N/A"
+
+    top_skills = ", ".join(skills[:5]) if skills else "no specific skills listed"
+    parts = [
+        f"**{name}** is a candidate with **{exp} years** of professional experience",
+        f"and expertise in {top_skills}.",
+    ]
+    if education and education != "N/A":
+        parts.append(f"Educational background: {education}.")
+    if match_score is not None:
+        if match_score >= 70:
+            parts.append(f"With a **{match_score}%** match score, this candidate is a **strong fit** for the role.")
+        elif match_score >= 40:
+            parts.append(f"At **{match_score}%** match, this candidate shows **moderate alignment** and may benefit from upskilling.")
+        else:
+            parts.append(f"The **{match_score}%** match score indicates **significant gaps** in required qualifications.")
+    if matched_skills:
+        parts.append(f"Key strengths include: {', '.join(matched_skills[:4])}.")
+    if missing_skills:
+        parts.append(f"Areas for development: {', '.join(missing_skills[:4])}.")
+    if experience_gap and experience_gap > 0:
+        parts.append(f"Note: {experience_gap} year(s) below the experience requirement.")
+    return " ".join(parts)
+
+
+def generate_interview_questions(skills, job_requirements=None, missing_skills=None, experience=0):
+    """Generate interview questions based on candidate profile."""
+    questions = {"technical": [], "behavioral": [], "skill_gap": []}
+
+    tech_templates = [
+        "Describe a complex project where you used {skill}. What challenges did you face?",
+        "How do you stay current with best practices in {skill}?",
+        "Can you explain the architecture decisions you've made involving {skill}?",
+        "What testing strategies do you employ when working with {skill}?",
+        "Walk us through how you would debug a performance issue in a {skill}-based system.",
+    ]
+    for i, skill in enumerate(skills[:5]):
+        template = tech_templates[i % len(tech_templates)]
+        questions["technical"].append(template.format(skill=skill))
+
+    behavioral = [
+        "Tell me about a time you had to learn a new technology quickly to meet a project deadline.",
+        "Describe a situation where you disagreed with a team member on a technical approach. How did you resolve it?",
+        "How do you prioritize tasks when working on multiple projects simultaneously?",
+        "Give an example of how you mentored a junior team member or contributed to knowledge sharing.",
+        "Describe a time when a project requirement changed significantly. How did you adapt?",
+    ]
+    if experience >= 5:
+        behavioral.append("Tell me about your experience leading a team through a challenging project.")
+        behavioral.append("How do you approach setting technical direction for your team?")
+    questions["behavioral"] = behavioral
+
+    if missing_skills:
+        gap_templates = [
+            "While your background is strong, this role requires {skill}. What's your familiarity with it?",
+            "How would you approach learning {skill} in the context of this role?",
+            "Have you worked alongside teams that used {skill}? What did you observe?",
+        ]
+        for i, skill in enumerate(missing_skills[:3]):
+            template = gap_templates[i % len(gap_templates)]
+            questions["skill_gap"].append(template.format(skill=skill))
+
+    return questions
+
+
+def extract_certifications_from_text(resume_text):
+    """Extract certifications from resume text using regex patterns."""
+    if not resume_text:
+        return []
+    cert_patterns = [
+        r'(?:certified|certification|certificate)\s*(?:in|:)?\s*([A-Za-z\s\-\+\.]{4,40})',
+        r'(AWS\s+(?:Certified\s+)?(?:Solutions?\s*Architect|Developer|SysOps|DevOps|Cloud\s*Practitioner)[^\n]{0,30})',
+        r'(Google\s+(?:Cloud\s+)?(?:Certified|Professional)[^\n]{0,30})',
+        r'(Azure\s+(?:Certified|Administrator|Developer|Solutions?\s*Architect)[^\n]{0,30})',
+        r'(PMP|SCRUM|CSM|CISSP|CCNA|CCNP|CKA|CKAD)',
+        r'((?:Oracle|Microsoft|Salesforce)\s+Certified[^\n]{0,30})',
+    ]
+    certs = []
+    for pattern in cert_patterns:
+        matches = re.findall(pattern, resume_text, re.IGNORECASE)
+        for match in matches:
+            cleaned = match.strip().strip('.,;:')
+            if len(cleaned) > 3 and cleaned not in certs:
+                certs.append(cleaned)
+    return certs[:10]
+
+
+def parse_education_level(education_text):
+    """Parse education level from text."""
+    if not education_text:
+        return "Unknown"
+    text = education_text.lower()
+    if any(t in text for t in ["phd", "ph.d", "doctorate", "doctoral"]):
+        return "PhD/Doctorate"
+    elif any(t in text for t in ["master", "m.s.", "m.sc", "mba", "m.tech", "m.e."]):
+        return "Master's"
+    elif any(t in text for t in ["bachelor", "b.s.", "b.sc", "b.tech", "b.e.", "bba", "b.a."]):
+        return "Bachelor's"
+    elif any(t in text for t in ["diploma", "associate"]):
+        return "Diploma/Associate"
+    elif any(t in text for t in ["high school", "12th", "hsc"]):
+        return "High School"
+    return "Other"
 
 # ─── Journey Timeline component ───────────────────────────────────────────────
 JOURNEY_STAGES = [
@@ -469,7 +670,7 @@ else:
     st.sidebar.info(f"Role: **{st.session_state.role}**")
 
     # Build nav options by role
-    nav_options = ["Analytics Dashboard", "AI Ranking", "Candidates List", "Upload Resume", "Schedule Interview"]
+    nav_options = ["AI Dashboard", "Analytics Dashboard", "Candidate Profile", "AI Ranking", "Candidates List", "Upload Resume", "Schedule Interview", "Compare Candidates"]
     if st.session_state.role == "Admin":
         nav_options.append("Admin Settings")
     if st.session_state.role == "Candidate":
@@ -484,9 +685,208 @@ else:
         st.rerun()
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # AI DASHBOARD PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    if choice == "AI Dashboard":
+        st.title("🤖 AI Intelligence Dashboard")
+        st.markdown("Automated candidate match evaluation, AI summaries, skill gap radar, and explainable AI insights.")
+        st.markdown("---")
+
+        with st.spinner("Loading AI evaluation data..."):
+            job_res = api_request("GET", "/job")
+            cand_res = api_request("GET", "/candidate")
+
+        if job_res is None or cand_res is None:
+            st.stop()
+        if job_res.status_code != 200 or cand_res.status_code != 200:
+            st.error("Failed to fetch data from backend.")
+            st.stop()
+
+        jobs = job_res.json()
+        candidates = cand_res.json()
+
+        if not jobs:
+            st.warning("⚠️ No job roles found. Please seed or add jobs in Admin Settings.")
+            st.stop()
+        if not candidates:
+            st.info("📭 No candidates uploaded yet. Upload resumes to perform AI analysis.")
+            st.stop()
+
+        # Job Selector Box
+        st.markdown('<div class="job-selector-box">', unsafe_allow_html=True)
+        col_j1, col_j2 = st.columns([2, 1])
+        with col_j1:
+            st.markdown("### 🎯 Select Target Job Role")
+            job_opts = {j["title"]: j["id"] for j in jobs}
+            selected_job_title = st.selectbox("Analyze candidates against job:", list(job_opts.keys()), key="ai_dash_job_select")
+            job_id = job_opts[selected_job_title]
+        with col_j2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            selected_job_obj = next((j for j in jobs if j["id"] == job_id), None)
+            if selected_job_obj:
+                st.caption(f"**Required Experience:** {selected_job_obj.get('experience_required', 0)} years")
+                reqs = selected_job_obj.get("requirements", [])
+                if reqs:
+                    st.caption("**Target Skills:** " + ", ".join(reqs))
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        results = []
+        with st.spinner("Computing AI Scores & Gap Analyses..."):
+            for cand in candidates:
+                score_res = api_request("GET", f"/score?candidate_id={cand['id']}&job_id={job_id}")
+                if score_res and score_res.status_code == 200:
+                    sd = score_res.json()
+                    results.append({
+                        "candidate": cand,
+                        "match_score": sd["match_score"],
+                        "details": sd["details"]
+                    })
+                else:
+                    results.append({
+                        "candidate": cand,
+                        "match_score": 0.0,
+                        "details": {"matched_skills": [], "missing_skills": [], "experience_gap": 0}
+                    })
+
+        results.sort(key=lambda x: x["match_score"], reverse=True)
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        top_score = results[0]["match_score"] if results else 0
+        avg_score = round(sum(r["match_score"] for r in results)/len(results), 1) if results else 0
+        shortlisted_cnt = sum(1 for r in results if r["match_score"] >= 70)
+        maybe_cnt = sum(1 for r in results if 40 <= r["match_score"] < 70)
+        reject_cnt = sum(1 for r in results if r["match_score"] < 40)
+
+        with m1:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">🔥 Highest Match</div><div class="metric-value" style="color:#10B981;">{top_score}%</div></div>', unsafe_allow_html=True)
+        with m2:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">📊 Average Match</div><div class="metric-value" style="color:#06B6D4;">{avg_score}%</div></div>', unsafe_allow_html=True)
+        with m3:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">✅ Shortlisted</div><div class="metric-value" style="color:#34D399;">{shortlisted_cnt}</div></div>', unsafe_allow_html=True)
+        with m4:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">🤔 Under Review</div><div class="metric-value" style="color:#FCD34D;">{maybe_cnt}</div></div>', unsafe_allow_html=True)
+        with m5:
+            st.markdown(f'<div class="metric-card"><div class="metric-title">❌ Low Match</div><div class="metric-value" style="color:#F87171;">{reject_cnt}</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.subheader("💡 Candidate AI Spotlight & Deep Analysis")
+        cand_names = [f"#{i+1} {r['candidate']['name']} ({r['match_score']}%)" for i, r in enumerate(results)]
+        sel_idx = st.selectbox("Choose Candidate for Deep AI Insight:", range(len(cand_names)), format_func=lambda i: cand_names[i])
+        
+        selected_res = results[sel_idx]
+        sel_cand = selected_res["candidate"]
+        sel_score = selected_res["match_score"]
+        sel_details = selected_res["details"]
+        rec_label, rec_class, rec_icon = get_recommendation(sel_score)
+
+        ai_summary_text = generate_ai_summary(
+            sel_cand,
+            match_score=sel_score,
+            matched_skills=sel_details.get("matched_skills"),
+            missing_skills=sel_details.get("missing_skills"),
+            experience_gap=sel_details.get("experience_gap")
+        )
+
+        st.markdown(f"""
+            <div class="ai-insight-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; color:#E5E7EB;">👤 {sel_cand['name']}</h3>
+                    <span class="{rec_class}" style="font-size:14px; padding:6px 16px;">{rec_icon} {rec_label} ({sel_score}%)</span>
+                </div>
+                <hr style="margin:12px 0; border-color:rgba(79,70,229,0.2);">
+                <div style="font-size:15px; line-height:1.7; color:#D1D5DB;">
+                    🤖 <b>AI Summary:</b><br>{ai_summary_text}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        col_radar, col_xai = st.columns([1.2, 1])
+
+        with col_radar:
+            st.markdown("#### 🎯 Skill Gap & Requirement Analysis")
+            req_skills = selected_job_obj.get("requirements", []) if selected_job_obj else []
+            if req_skills:
+                matched_set = set(s.lower() for s in sel_details.get("matched_skills", []))
+                
+                categories = req_skills + ["Experience Level"]
+                target_vals = [100] * len(req_skills) + [100]
+                
+                cand_exp_req = selected_job_obj.get("experience_required", 1) if selected_job_obj else 1
+                cand_exp_val = min(100, int((sel_cand.get("experience", 0) / max(1, cand_exp_req)) * 100))
+                
+                cand_vals = [100 if s.lower() in matched_set else 20 for s in req_skills] + [cand_exp_val]
+
+                fig_radar = go.Figure()
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=target_vals, theta=categories, fill='toself', name='Job Requirement',
+                    line_color='#6366F1', opacity=0.3
+                ))
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=cand_vals, theta=categories, fill='toself', name=sel_cand['name'],
+                    line_color='#10B981' if sel_score >= 70 else '#F59E0B'
+                ))
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True, range=[0, 100], showticklabels=False),
+                        bgcolor='rgba(0,0,0,0)'
+                    ),
+                    paper_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB',
+                    height=340, margin=dict(t=30, b=30, l=40, r=40)
+                )
+                st.plotly_chart(fig_radar, use_container_width=True)
+            else:
+                st.info("No skill requirements specified for radar analysis.")
+
+        with col_xai:
+            st.markdown("#### 🔍 Explainable AI (XAI) Breakdown")
+            st.caption("Detailed score composition weights & decision breakdown")
+
+            job_reqs = selected_job_obj.get("requirements", []) if selected_job_obj else []
+            total_reqs = len(job_reqs) if job_reqs else 1
+            skills_ratio = len(sel_details.get("matched_skills", [])) / max(1, total_reqs)
+            skills_contrib = round(skills_ratio * 60, 1)
+
+            exp_req = selected_job_obj.get("experience_required", 0) if selected_job_obj else 0
+            exp_ratio = min(1.0, sel_cand.get("experience", 0) / max(1, exp_req)) if exp_req > 0 else 1.0
+            exp_contrib = round(exp_ratio * 40, 1)
+
+            xai_df = pd.DataFrame({
+                "Factor": ["Skills Match (60% Max)", "Experience Match (40% Max)"],
+                "Points Earned": [skills_contrib, exp_contrib],
+                "Max Points": [60.0, 40.0]
+            })
+
+            fig_xai = px.bar(
+                xai_df, x="Points Earned", y="Factor", orientation='h',
+                color="Factor",
+                color_discrete_map={
+                    "Skills Match (60% Max)": "#6366F1",
+                    "Experience Match (40% Max)": "#06B6D4"
+                },
+                text="Points Earned"
+            )
+            fig_xai.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#E5E7EB', showlegend=False,
+                xaxis=dict(range=[0, 65]), margin=dict(t=10, b=10)
+            )
+            fig_xai.update_traces(textposition="outside")
+            st.plotly_chart(fig_xai, use_container_width=True)
+
+            st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.04); border-radius:10px; padding:12px; font-size:13px; color:#9CA3AF;">
+                    📌 <b>Scoring Formula:</b><br>
+                    • <b>Skills Weight (60%):</b> {len(sel_details.get('matched_skills', []))} / {total_reqs} skills matched → <b>{skills_contrib}/60 pts</b><br>
+                    • <b>Experience Weight (40%):</b> {sel_cand.get('experience', 0)} / {exp_req} yrs required → <b>{exp_contrib}/40 pts</b><br>
+                    • <b>Total Weighted Score:</b> <b style="color:#10B981;">{sel_score}%</b>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # ANALYTICS DASHBOARD PAGE
     # ═══════════════════════════════════════════════════════════════════════════
-    if choice == "Analytics Dashboard":
+    elif choice == "Analytics Dashboard":
         st.title("📊 Recruiter Analytics Dashboard")
         st.markdown("Real-time recruitment insights powered by your candidate pipeline.")
         st.markdown("---")
@@ -667,9 +1067,105 @@ else:
             )
             st.plotly_chart(fig_funnel, use_container_width=True)
 
-        # ── Row 3: Match Score Distribution (if ranking data available) ────────
+        # ── Row 3: Location, Experience & Education Distributions ───────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("🌐 Candidate Demographics & Background Distributions")
+
+        r3_c1, r3_c2, r3_c3 = st.columns(3)
+
+        with r3_c1:
+            st.markdown("##### 📍 Location Distribution")
+            if "location" in df.columns and not df["location"].dropna().empty:
+                loc_counts = df["location"].fillna("Not Specified").value_counts().reset_index()
+                loc_counts.columns = ["Location", "Count"]
+                fig_loc = px.bar(
+                    loc_counts, x="Count", y="Location", orientation='h',
+                    color="Count", color_continuous_scale="Purples"
+                )
+                fig_loc.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#E5E7EB', coloraxis_showscale=False,
+                    yaxis={'categoryorder': 'total ascending'}, margin=dict(t=10, b=10)
+                )
+                st.plotly_chart(fig_loc, use_container_width=True)
+            else:
+                st.info("No location data available.")
+
+        with r3_c2:
+            st.markdown("##### ⏳ Experience Distribution")
+            if "experience" in df.columns and not df["experience"].dropna().empty:
+                fig_exp = px.histogram(
+                    df, x="experience", nbins=8,
+                    color_discrete_sequence=["#06B6D4"],
+                    labels={"experience": "Years of Experience"}
+                )
+                fig_exp.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#E5E7EB', yaxis_title="Candidates", margin=dict(t=10, b=10)
+                )
+                st.plotly_chart(fig_exp, use_container_width=True)
+            else:
+                st.info("No experience data available.")
+
+        with r3_c3:
+            st.markdown("##### 🎓 Education Distribution")
+            if "education" in df.columns and not df["education"].dropna().empty:
+                edu_levels = [parse_education_level(e) for e in df["education"].dropna()]
+                from collections import Counter
+                edu_counts = pd.DataFrame(list(Counter(edu_levels).items()), columns=["Level", "Count"])
+                fig_edu = px.pie(
+                    edu_counts, values="Count", names="Level", hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig_edu.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB', margin=dict(t=10, b=10)
+                )
+                st.plotly_chart(fig_edu, use_container_width=True)
+            else:
+                st.info("No education data available.")
+
+        # ── Row 4: Diversity Analytics ─────────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("🌈 Diversity & Pipeline Analytics")
+        st.caption("Tracking geographic spread, educational diversity, and skill spectrum across talent pool.")
+
+        div_c1, div_c2, div_c3 = st.columns(3)
+
+        num_locations = df["location"].nunique() if "location" in df.columns else 0
+        num_unique_skills = len(set([s for skills in df["skills"].dropna() if isinstance(skills, list) for s in skills])) if "skills" in df.columns else 0
+        avg_exp_val = round(df["experience"].mean(), 1) if ("experience" in df.columns and not df["experience"].empty) else 0
+
+        with div_c1:
+            st.markdown(f"""
+                <div class="diversity-metric">
+                    <div class="metric-title">🌍 Geographic Reach</div>
+                    <div class="metric-value" style="color:#06B6D4;">{num_locations}</div>
+                    <div style="font-size:12px; color:#9CA3AF; margin-top:4px;">Unique Candidate Locations</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with div_c2:
+            st.markdown(f"""
+                <div class="diversity-metric">
+                    <div class="metric-title">🛠️ Skill Spectrum Diversity</div>
+                    <div class="metric-value" style="color:#8B5CF6;">{num_unique_skills}</div>
+                    <div style="font-size:12px; color:#9CA3AF; margin-top:4px;">Distinct Technical Skills</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with div_c3:
+            st.markdown(f"""
+                <div class="diversity-metric">
+                    <div class="metric-title">📈 Avg Talent Experience</div>
+                    <div class="metric-value" style="color:#10B981;">{avg_exp_val} yrs</div>
+                    <div style="font-size:12px; color:#9CA3AF; margin-top:4px;">Average Candidate Tenure</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # Match Score Histogram if session data present
         if st.session_state.get("ranking_results"):
-            st.subheader("📈 Match Percentage Distribution")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("📈 AI Match Score Distribution")
             scores = [r["match_score"] for r in st.session_state["ranking_results"]]
             names = [r["candidate"]["name"] for r in st.session_state["ranking_results"]]
             df_scores = pd.DataFrame({"Candidate": names, "Match Score": scores})
@@ -973,6 +1469,180 @@ else:
                         st.markdown("<hr style='margin: 4px 0; border-color: rgba(255,255,255,0.06);'>", unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # CANDIDATE PROFILE PAGE (DEEP DIVE)
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Candidate Profile":
+        st.title("👤 Candidate Comprehensive Profile")
+        st.markdown("Detailed resume details, experience, education, skills, projects, certifications, AI insights, and generated interview questions.")
+        st.markdown("---")
+
+        with st.spinner("Loading candidates..."):
+            cand_res = api_request("GET", "/candidate")
+            job_res = api_request("GET", "/job")
+
+        if cand_res is None or cand_res.status_code != 200:
+            st.error("Failed to load candidates.")
+            st.stop()
+
+        candidates = cand_res.json()
+        jobs = job_res.json() if (job_res and job_res.status_code == 200) else []
+
+        if not candidates:
+            st.info("No candidate profiles available. Upload resumes first.")
+            st.stop()
+
+        cand_map = {f"{c['name']} ({c['email']})": c for c in candidates}
+        selected_cand_label = st.selectbox("Select Candidate:", list(cand_map.keys()), key="cand_profile_select")
+        cand = cand_map[selected_cand_label]
+
+        certs = extract_certifications_from_text(cand.get("resume_text", ""))
+
+        st.markdown(f"""
+            <div class="profile-container" style="background: linear-gradient(135deg, rgba(79,70,229,0.1), rgba(6,182,212,0.08)); border-color: rgba(79,70,229,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h2 style="margin:0; color:#E5E7EB;">👤 {cand['name']}</h2>
+                        <p style="margin:4px 0 0 0; color:#9CA3AF;">📧 {cand['email']} | 📞 {cand.get('phone') or 'N/A'} | 📍 {cand.get('location') or 'Not Specified'}</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <span class="badge" style="background:rgba(79,70,229,0.2); color:#818CF8; border:1px solid rgba(79,70,229,0.4); font-size:14px; padding:6px 14px;">
+                            ⏳ {cand.get('experience', 0)} Years Experience
+                        </span>
+                        <div style="margin-top:6px; font-size:13px; color:#9CA3AF;">Status: <b>{cand.get('status', 'Applied')}</b></div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        t_info, t_exp_edu, t_skills_proj, t_ai_insights, t_questions = st.tabs([
+            "📄 Resume Info", "💼 Experience & Education", "🛠️ Skills, Projects & Certs", "🤖 AI Insights", "❓ Interview Questions"
+        ])
+
+        with t_info:
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                st.subheader("📋 Overview & Expectations")
+                st.write(f"**Notice Period:** {cand.get('notice_period') or 'N/A'}")
+                st.write(f"**Expected CTC:** {cand.get('expected_ctc') or 'N/A'}")
+                st.write(f"**Current Location:** {cand.get('location') or 'N/A'}")
+                st.write(f"**Application Date:** {cand.get('created_at', 'N/A')[:10] if cand.get('created_at') else 'N/A'}")
+            with c2:
+                st.subheader("📜 Raw Resume Text")
+                st.text_area("Extracted Resume Content", value=cand.get("resume_text", "No raw resume text available."), height=200, disabled=True, key=f"cand_raw_{cand['id']}")
+
+        with t_exp_edu:
+            col_e1, col_e2 = st.columns(2)
+            with col_e1:
+                st.subheader("💼 Experience Breakdown")
+                exp_yrs = cand.get("experience", 0)
+                st.markdown(f"**Total Professional Experience:** {exp_yrs} Years")
+                if exp_yrs >= 5:
+                    level = "Senior / Lead Level"
+                elif exp_yrs >= 2:
+                    level = "Mid Level"
+                else:
+                    level = "Junior / Entry Level"
+                st.info(f"Seniority Level Assessment: **{level}**")
+            with col_e2:
+                st.subheader("🎓 Education Details")
+                edu_text = cand.get("education") or "Not Specified"
+                edu_level = parse_education_level(edu_text)
+                st.write(f"**Highest Qualification:** {edu_text}")
+                st.write(f"**Degree Classification:** {edu_level}")
+
+        with t_skills_proj:
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                st.subheader("🛠️ Technical Skills")
+                skills = cand.get("skills", [])
+                if skills:
+                    st.markdown(" ".join([f'<span class="badge badge-skill">{s}</span>' for s in skills]), unsafe_allow_html=True)
+                else:
+                    st.caption("No skills extracted.")
+            with col_s2:
+                st.subheader("📁 Key Projects")
+                projects = cand.get("projects", [])
+                if projects:
+                    for p in projects:
+                        st.markdown(f"• **{p}**")
+                else:
+                    st.caption("No explicit projects extracted.")
+            with col_s3:
+                st.subheader("🏆 Certifications")
+                if certs:
+                    for cert in certs:
+                        st.markdown(f"🏅 **{cert}**")
+                else:
+                    st.caption("No certifications detected in resume.")
+
+        with t_ai_insights:
+            st.subheader("🤖 AI Candidate Evaluation & Insights")
+            
+            if jobs:
+                j_opts = {j["title"]: j["id"] for j in jobs}
+                sel_j_title = st.selectbox("Target Job Role for AI Analysis:", list(j_opts.keys()), key=f"insights_job_{cand['id']}")
+                j_id = j_opts[sel_j_title]
+
+                score_res = api_request("GET", f"/score?candidate_id={cand['id']}&job_id={j_id}")
+                if score_res and score_res.status_code == 200:
+                    sd = score_res.json()
+                    m_score = sd["match_score"]
+                    m_details = sd["details"]
+
+                    st.markdown(f"""
+                        <div class="ai-insight-card">
+                            <h4>🎯 Role Compatibility Summary vs. {sel_j_title}</h4>
+                            <p style="font-size:15px; color:#D1D5DB;">
+                                {generate_ai_summary(cand, match_score=m_score, matched_skills=m_details['matched_skills'], missing_skills=m_details['missing_skills'], experience_gap=m_details['experience_gap'])}
+                            </p>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    ins_c1, ins_c2 = st.columns(2)
+                    with ins_c1:
+                        st.markdown("#### 💪 Key Strengths & Advantages")
+                        for sk in m_details.get("matched_skills", []):
+                            st.markdown(f"✅ Verified capability in **{sk}**")
+                        if cand.get("experience", 0) > 3:
+                            st.markdown("✅ Proven industry experience & maturity")
+                    with ins_c2:
+                        st.markdown("#### ⚠️ Growth Areas & Skill Gaps")
+                        for sk in m_details.get("missing_skills", []):
+                            st.markdown(f"❌ Lacks verified experience in **{sk}**")
+                        if m_details.get("experience_gap", 0) > 0:
+                            st.markdown(f"⏳ **{m_details['experience_gap']} year(s)** below required experience threshold")
+            else:
+                st.info("No jobs available for targeted AI insights.")
+
+        with t_questions:
+            st.subheader("❓ AI-Generated Candidate Interview Questions")
+            st.caption("Tailored technical, behavioral, and skill-gap questions based on candidate profile.")
+
+            candidate_skills = cand.get("skills", [])
+            questions_data = generate_interview_questions(
+                candidate_skills,
+                experience=cand.get("experience", 0)
+            )
+
+            q_tab1, q_tab2 = st.tabs(["💻 Technical Questions", "🤝 Behavioral Questions"])
+
+            with q_tab1:
+                for idx, q in enumerate(questions_data["technical"], 1):
+                    st.markdown(f"""
+                        <div class="question-card">
+                            <b style="color:#6366F1;">Question {idx}:</b> {q}
+                        </div>
+                    """, unsafe_allow_html=True)
+
+            with q_tab2:
+                for idx, q in enumerate(questions_data["behavioral"], 1):
+                    st.markdown(f"""
+                        <div class="question-card">
+                            <b style="color:#10B981;">Question {idx}:</b> {q}
+                        </div>
+                    """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # AI RANKING PAGE
     # ═══════════════════════════════════════════════════════════════════════════
     elif choice == "AI Ranking":
@@ -1169,8 +1839,8 @@ else:
     # SCHEDULE INTERVIEW PAGE
     # ═══════════════════════════════════════════════════════════════════════════
     elif choice == "Schedule Interview":
-        st.title("📅 Interview Scheduling")
-        st.markdown("Schedule interviews for shortlisted candidates and track all upcoming sessions.")
+        st.title("📅 Interview Scheduling & Management")
+        st.markdown("Schedule interviews for candidates, view calendar schedules, track session statuses, and generate tailored interview questions.")
         st.markdown("---")
 
         if st.session_state.role == "Candidate":
@@ -1184,102 +1854,191 @@ else:
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
         interviews = interview_res.json() if (interview_res and interview_res.status_code == 200) else []
 
-        sched_col, list_col = st.columns([1.1, 1])
+        tab_sched, tab_cal, tab_status, tab_qgen = st.tabs([
+            "➕ Schedule Interview", "📅 Calendar View", "📋 Interview Status", "❓ Generated Interview Questions"
+        ])
 
-        # ── Scheduling Form ────────────────────────────────────────────────────
-        with sched_col:
-            st.subheader("➕ Schedule New Interview")
+        # ── Tab 1: Schedule Form ──────────────────────────────────────────────
+        with tab_sched:
+            sched_col, info_col = st.columns([1.2, 1])
+            with sched_col:
+                st.subheader("Schedule New Session")
+                if not candidates:
+                    st.warning("No candidates found. Upload resumes first.")
+                else:
+                    with st.container(border=True):
+                        priority_statuses = ["Shortlisted", "Applied", "Screening", "Interview", "Selected"]
+                        sorted_cands = sorted(
+                            candidates,
+                            key=lambda c: priority_statuses.index(c.get("status", "Applied"))
+                            if c.get("status") in priority_statuses else 99
+                        )
+                        cand_options = {f"{c['name']} ({c.get('status', 'Applied')}) — {c['email']}": c["id"] for c in sorted_cands}
 
-            if not candidates:
-                st.warning("No candidates found. Upload resumes first.")
-            else:
-                with st.container(border=True):
-                    # Candidate dropdown: show shortlisted/interview status candidates first
-                    priority_statuses = ["Shortlisted", "Applied", "Screening", "Interview", "Selected"]
-                    sorted_cands = sorted(
-                        candidates,
-                        key=lambda c: priority_statuses.index(c.get("status", "Applied"))
-                        if c.get("status") in priority_statuses else 99
-                    )
-                    cand_options = {f"{c['name']} ({c.get('status', 'Applied')}) — {c['email']}": c["id"] for c in sorted_cands}
+                        selected_cand_label = st.selectbox(
+                            "👤 Candidate Name *",
+                            list(cand_options.keys()),
+                            help="Shortlisted candidates appear first"
+                        )
+                        selected_cand_id = cand_options[selected_cand_label]
 
-                    selected_cand_label = st.selectbox(
-                        "👤 Candidate Name *",
-                        list(cand_options.keys()),
-                        help="Shortlisted candidates appear first"
-                    )
-                    selected_cand_id = cand_options[selected_cand_label]
+                        int_date = st.date_input(
+                            "📆 Interview Date *",
+                            min_value=date.today(),
+                            value=date.today()
+                        )
+                        int_time = st.time_input("🕐 Interview Time *")
+                        interviewer = st.text_input("👔 Interviewer Name *", placeholder="e.g. Sarah Johnson")
+                        platform = st.selectbox("💻 Platform *", ["Google Meet", "Microsoft Teams", "Zoom"])
+                        notes = st.text_area("📝 Notes (optional)", placeholder="Topics, focus areas...", height=80)
 
-                    int_date = st.date_input(
-                        "📆 Interview Date *",
-                        min_value=date.today(),
-                        value=date.today()
-                    )
-                    int_time = st.time_input("🕐 Interview Time *")
-                    interviewer = st.text_input("👔 Interviewer Name *", placeholder="e.g. Sarah Johnson")
-                    platform = st.selectbox(
-                        "💻 Platform *",
-                        ["Google Meet", "Microsoft Teams", "Zoom"]
-                    )
-                    notes = st.text_area("📝 Notes (optional)", placeholder="Any special instructions or topics to cover...", height=80)
+                        if st.button("📅 Confirm & Schedule Interview", use_container_width=True, type="primary"):
+                            if not interviewer.strip():
+                                st.error("❌ Please enter the interviewer's name.")
+                            else:
+                                payload = {
+                                    "candidate_id": selected_cand_id,
+                                    "interview_date": str(int_date),
+                                    "interview_time": str(int_time)[:5],
+                                    "interviewer_name": interviewer.strip(),
+                                    "platform": platform,
+                                    "notes": notes.strip() if notes.strip() else None,
+                                }
+                                with st.spinner("Scheduling..."):
+                                    res = api_request("POST", "/interview", json=payload)
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("📅 Schedule Interview", use_container_width=True, type="primary"):
-                        if not interviewer.strip():
-                            st.error("❌ Please enter the interviewer's name.")
+                                if res and res.status_code == 201:
+                                    data = res.json()
+                                    st.success(f"🎉 Interview scheduled for **{data['candidate_name']}** on **{data['interview_date']}** at **{data['interview_time']}** via **{data['platform']}**!")
+                                    st.balloons()
+                                    time.sleep(1)
+                                    st.rerun()
+                                elif res:
+                                    err = res.json().get("detail", "Unknown error")
+                                    st.error(f"❌ Failed to schedule: {err}")
+
+            with info_col:
+                st.subheader("💡 Tips for Scheduling")
+                st.markdown("""
+                    - **Candidate Status:** Scheduling an interview automatically updates the candidate's status to **Interview**.
+                    - **Automated Invite:** Use the *Candidates List → Communication* tab to send formal calendar invites.
+                    - **Platform:** Support for Google Meet, Microsoft Teams, and Zoom.
+                """)
+
+        # ── Tab 2: Calendar View ──────────────────────────────────────────────
+        with tab_cal:
+            st.subheader("📅 Monthly Interview Calendar")
+            today = date.today()
+            
+            # Month/Year selection
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                sel_month = st.selectbox("Select Month", range(1, 13), index=today.month - 1, format_func=lambda m: cal_module.month_name[m])
+            with col_m2:
+                sel_year = st.number_input("Select Year", min_value=2024, max_value=2030, value=today.year)
+
+            month_cal = cal_module.monthcalendar(sel_year, sel_month)
+            days_header = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            
+            # Render Calendar Table
+            cal_cols = st.columns(7)
+            for idx, d_name in enumerate(days_header):
+                cal_cols[idx].markdown(f"**{d_name}**")
+
+            # Map interviews by date string YYYY-MM-DD
+            iv_by_date = {}
+            for iv in interviews:
+                d_str = iv.get("interview_date")
+                if d_str:
+                    iv_by_date.setdefault(d_str, []).append(iv)
+
+            for week in month_cal:
+                w_cols = st.columns(7)
+                for day_idx, day_num in enumerate(week):
+                    with w_cols[day_idx]:
+                        if day_num == 0:
+                            st.markdown('<div class="cal-cell" style="opacity:0.3;"></div>', unsafe_allow_html=True)
                         else:
-                            payload = {
-                                "candidate_id": selected_cand_id,
-                                "interview_date": str(int_date),
-                                "interview_time": str(int_time)[:5],
-                                "interviewer_name": interviewer.strip(),
-                                "platform": platform,
-                                "notes": notes.strip() if notes.strip() else None,
-                            }
-                            with st.spinner("Scheduling interview..."):
-                                res = api_request("POST", "/interview", json=payload)
+                            date_key = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
+                            is_today = (date_key == today.strftime("%Y-%m-%d"))
+                            cell_cls = "cal-cell cal-cell-today" if is_today else "cal-cell"
 
-                            if res and res.status_code == 201:
-                                data = res.json()
-                                st.success(f"🎉 Interview scheduled for **{data['candidate_name']}** on **{data['interview_date']}** at **{data['interview_time']}** via **{data['platform']}**!")
-                                st.balloons()
-                                time.sleep(1)
-                                st.rerun()
-                            elif res:
-                                err = res.json().get("detail", "Unknown error")
-                                st.error(f"❌ Failed to schedule interview: {err}")
+                            day_events = iv_by_date.get(date_key, [])
+                            events_html = ""
+                            for ev in day_events:
+                                events_html += f'<div class="cal-event">👤 {ev["candidate_name"]}<br>🕒 {ev["interview_time"]}</div>'
 
-        # ── Interviews List ────────────────────────────────────────────────────
-        with list_col:
-            st.subheader(f"📋 All Interviews ({len(interviews)})")
+                            st.markdown(f"""
+                                <div class="{cell_cls}">
+                                    <b>{day_num}</b> {'📌 Today' if is_today else ''}
+                                    {events_html}
+                                </div>
+                            """, unsafe_allow_html=True)
+
+        # ── Tab 3: Interview Status ───────────────────────────────────────────
+        with tab_status:
+            st.subheader(f"📋 Scheduled Sessions & Status ({len(interviews)})")
             if not interviews:
-                st.info("No interviews scheduled yet. Use the form to schedule one.")
+                st.info("No interviews scheduled yet.")
             else:
-                status_filter_iv = st.selectbox("Filter by Status", ["All", "Scheduled", "Completed", "Cancelled"], key="iv_status_filter")
-                filtered_ivs = interviews if status_filter_iv == "All" else [iv for iv in interviews if iv["status"] == status_filter_iv]
+                sf = st.selectbox("Filter by Status", ["All", "Scheduled", "Completed", "Cancelled"], key="iv_status_filter_tab")
+                filtered_ivs = interviews if sf == "All" else [iv for iv in interviews if iv["status"] == sf]
 
                 for iv in filtered_ivs:
                     status_colors_iv = {"Scheduled": "#3B82F6", "Completed": "#10B981", "Cancelled": "#EF4444"}
                     iv_color = status_colors_iv.get(iv["status"], "#6B7280")
                     pf_icon = platform_icon(iv["platform"])
 
-                    st.markdown(f"""
-                        <div class="interview-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <b style="color:#E5E7EB; font-size:15px;">👤 {iv['candidate_name']}</b>
-                                <span style="background:{iv_color}20; color:{iv_color}; border:1px solid {iv_color}60; 
-                                      padding:3px 10px; border-radius:50px; font-size:12px; font-weight:600;">
-                                    {iv['status']}
-                                </span>
+                    ic1, ic2 = st.columns([3, 1])
+                    with ic1:
+                        st.markdown(f"""
+                            <div class="interview-card">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                    <b style="color:#E5E7EB; font-size:15px;">👤 {iv['candidate_name']} ({iv['candidate_email']})</b>
+                                    <span style="background:{iv_color}20; color:{iv_color}; border:1px solid {iv_color}60; padding:3px 10px; border-radius:50px; font-size:12px; font-weight:600;">
+                                        {iv['status']}
+                                    </span>
+                                </div>
+                                <div style="color:#9CA3AF; font-size:13px; line-height:1.8;">
+                                    📆 <b>{iv['interview_date']}</b> at <b>{iv['interview_time']}</b> | 👔 Interviewer: <b>{iv['interviewer_name']}</b><br>
+                                    {pf_icon} Platform: <span class="platform-pill">{iv['platform']}</span>
+                                </div>
+                                {f'<div style="color:#6B7280; font-size:12px; margin-top:6px;">📝 {iv["notes"]}</div>' if iv.get("notes") else ""}
                             </div>
-                            <div style="color:#9CA3AF; font-size:13px; line-height:1.8;">
-                                📆 <b>{iv['interview_date']}</b> at <b>{iv['interview_time']}</b><br>
-                                👔 Interviewer: <b>{iv['interviewer_name']}</b><br>
-                                {pf_icon} Platform: <span class="platform-pill">{iv['platform']}</span>
-                            </div>
-                            {f'<div style="color:#6B7280; font-size:12px; margin-top:6px;">📝 {iv["notes"]}</div>' if iv.get("notes") else ""}
-                        </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
+                    with ic2:
+                        new_st = st.selectbox("Update Status", ["Scheduled", "Completed", "Cancelled"], index=["Scheduled", "Completed", "Cancelled"].index(iv["status"]), key=f"status_sel_{iv['id']}")
+                        if st.button("Update", key=f"btn_update_iv_{iv['id']}"):
+                            patch_r = api_request("PATCH", f"/interview/{iv['id']}/status?new_status={new_st}")
+                            if patch_r and patch_r.status_code == 200:
+                                st.toast("✅ Status updated!")
+                                time.sleep(0.4)
+                                st.rerun()
+
+        # ── Tab 4: Generated Interview Questions ─────────────────────────────
+        with tab_qgen:
+            st.subheader("❓ Interview Question Generator")
+            st.caption("Generate role-tailored technical and behavioral questions for upcoming interviews.")
+
+            if not candidates:
+                st.info("No candidates available to generate questions.")
+            else:
+                q_cand_opts = {f"{c['name']} ({c['email']})": c for c in candidates}
+                sel_q_cand_label = st.selectbox("Select Candidate for Interview Questions:", list(q_cand_opts.keys()), key="qgen_cand_select")
+                q_cand = q_cand_opts[sel_q_cand_label]
+
+                q_skills = q_cand.get("skills", [])
+                gen_questions = generate_interview_questions(q_skills, experience=q_cand.get("experience", 0))
+
+                col_q1, col_q2 = st.columns(2)
+                with col_q1:
+                    st.markdown("#### 💻 Technical Questions")
+                    for idx, q in enumerate(gen_questions["technical"], 1):
+                        st.markdown(f'<div class="question-card"><b style="color:#6366F1;">Q{idx}:</b> {q}</div>', unsafe_allow_html=True)
+                with col_q2:
+                    st.markdown("#### 🤝 Behavioral & Leadership Questions")
+                    for idx, q in enumerate(gen_questions["behavioral"], 1):
+                        st.markdown(f'<div class="question-card"><b style="color:#10B981;">Q{idx}:</b> {q}</div>', unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # UPLOAD RESUME PAGE
@@ -1423,6 +2182,176 @@ else:
                             """, unsafe_allow_html=True)
                 else:
                     prog_placeholder.empty()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CANDIDATE COMPARISON PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Compare Candidates":
+        st.title("⚔️ Side-by-Side Candidate Comparison")
+        st.markdown("Compare 2 to 4 candidates side-by-side on match score, skills, experience, education, certifications, and projects.")
+        st.markdown("---")
+
+        with st.spinner("Loading comparison data..."):
+            cand_res = api_request("GET", "/candidate")
+            job_res = api_request("GET", "/job")
+
+        if cand_res is None or job_res is None or cand_res.status_code != 200 or job_res.status_code != 200:
+            st.error("Failed to load candidates or jobs for comparison.")
+            st.stop()
+
+        candidates = cand_res.json()
+        jobs = job_res.json()
+
+        if len(candidates) < 2:
+            st.warning("⚠️ At least 2 candidates are required to perform comparison. Upload more resumes first.")
+            st.stop()
+
+        st.markdown('<div class="job-selector-box">', unsafe_allow_html=True)
+        col_cj1, col_cj2 = st.columns([2, 1])
+        with col_cj1:
+            job_opts = {j["title"]: j["id"] for j in jobs}
+            selected_job_title = st.selectbox("Select Target Job for Comparison:", list(job_opts.keys()), key="comp_job_select")
+            job_id = job_opts[selected_job_title]
+        with col_cj2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            sel_job_obj = next((j for j in jobs if j["id"] == job_id), None)
+            if sel_job_obj:
+                st.caption(f"**Required Exp:** {sel_job_obj.get('experience_required', 0)} yrs | **Req Skills:** {len(sel_job_obj.get('requirements', []))}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        cand_opts = {f"{c['name']} ({c['email']})": c for c in candidates}
+        default_selected = list(cand_opts.keys())[:min(3, len(candidates))]
+        selected_cand_keys = st.multiselect("Select 2 to 4 Candidates to Compare:", list(cand_opts.keys()), default=default_selected, max_selections=4)
+
+        if len(selected_cand_keys) < 2:
+            st.warning("Please select at least 2 candidates to compare.")
+            st.stop()
+
+        comp_candidates = [cand_opts[k] for k in selected_cand_keys]
+
+        comp_data = []
+        for c in comp_candidates:
+            score_res = api_request("GET", f"/score?candidate_id={c['id']}&job_id={job_id}")
+            if score_res and score_res.status_code == 200:
+                sd = score_res.json()
+                m_score = sd["match_score"]
+                m_details = sd["details"]
+            else:
+                m_score = 0.0
+                m_details = {"matched_skills": [], "missing_skills": [], "experience_gap": 0}
+            
+            certs = extract_certifications_from_text(c.get("resume_text", ""))
+            comp_data.append({
+                "candidate": c,
+                "score": m_score,
+                "details": m_details,
+                "certs": certs
+            })
+
+        best_cand_id = max(comp_data, key=lambda x: x["score"])["candidate"]["id"]
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("📊 Side-by-Side Comparison Overview")
+
+        cols = st.columns(len(comp_data))
+
+        for idx, item in enumerate(comp_data):
+            c = item["candidate"]
+            sc = item["score"]
+            dt = item["details"]
+            cr = item["certs"]
+            is_best = (c["id"] == best_cand_id)
+
+            rec_lbl, rec_cls, rec_ic = get_recommendation(sc)
+            border_style = "comparison-col comparison-winner" if is_best else "comparison-col"
+
+            with cols[idx]:
+                st.markdown(f"""
+                    <div class="{border_style}">
+                        {'<div style="background:#10B981; color:#000; font-weight:700; font-size:11px; padding:2px 8px; border-radius:4px; display:inline-block; margin-bottom:8px;">🏆 TOP MATCH</div>' if is_best else ''}
+                        <h3 style="margin:0; color:#E5E7EB;">{c['name']}</h3>
+                        <p style="color:#9CA3AF; font-size:12px; margin:4px 0 12px 0;">{c['email']}</p>
+                        
+                        <div style="text-align:center; margin:16px 0;">
+                            <div style="font-size:32px; font-weight:700; color:{score_color(sc)};">{sc}%</div>
+                            <span class="{rec_cls}" style="font-size:12px; margin-top:4px;">{rec_ic} {rec_lbl}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        st.subheader("🔍 Attribute-by-Attribute Comparison")
+
+        st.markdown("#### 1. Match Score Comparison")
+        score_df = pd.DataFrame({
+            "Candidate": [d["candidate"]["name"] for d in comp_data],
+            "Match Score (%)": [d["score"] for d in comp_data]
+        })
+        fig_comp_scores = px.bar(
+            score_df, x="Candidate", y="Match Score (%)", color="Candidate",
+            color_discrete_sequence=["#10B981", "#6366F1", "#06B6D4", "#F59E0B"],
+            text="Match Score (%)"
+        )
+        fig_comp_scores.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB', showlegend=False, margin=dict(t=10, b=10))
+        fig_comp_scores.update_traces(textposition="outside")
+        st.plotly_chart(fig_comp_scores, use_container_width=True)
+
+        st.markdown("#### 2. Experience & Education")
+        c_exp_cols = st.columns(len(comp_data))
+        for idx, item in enumerate(comp_data):
+            c = item["candidate"]
+            with c_exp_cols[idx]:
+                st.markdown(f"**{c['name']}**")
+                st.write(f"⏳ **Experience:** {c.get('experience', 0)} years")
+                st.write(f"🎓 **Education:** {c.get('education', 'N/A')}")
+                st.write(f"📍 **Location:** {c.get('location', 'N/A')}")
+
+        st.markdown("---")
+
+        st.markdown("#### 3. Skills Matrix")
+        c_sk_cols = st.columns(len(comp_data))
+        for idx, item in enumerate(comp_data):
+            c = item["candidate"]
+            dt = item["details"]
+            with c_sk_cols[idx]:
+                st.markdown(f"**{c['name']}**")
+                st.markdown("**Matched Required Skills:**")
+                if dt.get("matched_skills"):
+                    st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in dt["matched_skills"]]), unsafe_allow_html=True)
+                else:
+                    st.caption("None matched")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("**Missing Required Skills:**")
+                if dt.get("missing_skills"):
+                    st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in dt["missing_skills"]]), unsafe_allow_html=True)
+                else:
+                    st.caption("None missing")
+
+        st.markdown("---")
+
+        st.markdown("#### 4. Certifications & Key Projects")
+        c_cp_cols = st.columns(len(comp_data))
+        for idx, item in enumerate(comp_data):
+            c = item["candidate"]
+            cr = item["certs"]
+            projs = c.get("projects", [])
+            with c_cp_cols[idx]:
+                st.markdown(f"**{c['name']}**")
+                st.markdown("🏅 **Certifications:**")
+                if cr:
+                    for cert in cr:
+                        st.markdown(f"• {cert}")
+                else:
+                    st.caption("None detected")
+                
+                st.markdown("📁 **Projects:**")
+                if projs:
+                    for p in projs:
+                        st.markdown(f"• {p}")
+                else:
+                    st.caption("None specified")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # ADMIN SETTINGS PAGE
