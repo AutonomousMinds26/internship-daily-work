@@ -1,7 +1,11 @@
 import json
 
-from llm import llm
-from prompts import JOB_PROMPT
+try:
+    from AI.llm import llm
+    from AI.prompts import JOB_PROMPT
+except ImportError:
+    from llm import llm  # type: ignore
+    from prompts import JOB_PROMPT  # type: ignore
 
 
 def extract_job_info(job_text):
@@ -12,7 +16,7 @@ def extract_job_info(job_text):
 
     response = llm.invoke(prompt)
 
-    content = response.content.strip()
+    content = str(response.content).strip()
 
     # Remove markdown formatting
     content = content.replace(

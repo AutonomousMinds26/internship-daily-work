@@ -5,11 +5,12 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.database import engine, Base, SessionLocal
+from app.database import engine, Base, SessionLocal, run_db_migrations
 from app.logging_config import setup_logging
+import random
 from app.models import User, Candidate
 from app.auth import get_password_hash
-from app.routes import auth, jobs, candidates, interviews, communication
+from app.routes import auth, jobs, candidates, interviews, emails, monitoring, ai, tools
 
 # Initialize logging configuration
 setup_logging()
@@ -38,138 +39,115 @@ def seed_users():
                 db.add(user)
         db.commit()
     except Exception as e:
-        logger.error(f"Seeding users failed: {str(e)}")
+        logger.error(f"Seeding failed: {str(e)}")
         db.rollback()
     finally:
         db.close()
 
 def seed_candidates():
-    """Seed 50 candidates if DB contains fewer candidates to satisfy A2-9 requirements."""
+    """Seed 50 demo candidates with realistic data for the A2 Recruiter Dashboard."""
     db = SessionLocal()
     try:
-        count = db.query(Candidate).count()
-        if count >= 50:
+        existing_count = db.query(Candidate).count()
+        if existing_count >= 50:
             return
 
-        logger.info("Seeding candidate dataset to reach 50 candidates...")
-        
-        # Specified named candidates from prompt:
-        # Applied: Rahul, Rohan
-        # Screening: Ananya, Sneha
-        # Interview: Priya
-        # Selected: Amit
-        prompt_candidates = [
-            # Applied (4 total)
-            {"name": "Rahul Sharma", "email": "rahul.sharma@example.com", "phone": "+91 98765 43210", "status": "Applied", "experience": 3, "education": "B.Tech Computer Science", "skills": ["Python", "FastAPI", "Docker"], "ats_score": 88, "screening_score": 82, "final_score": 84, "ai_recommendation": "Shortlist for technical assessment.", "candidate_summary": "Python developer with experience in building REST APIs and microservices."},
-            {"name": "Rohan Verma", "email": "rohan.verma@example.com", "phone": "+91 98765 43211", "status": "Applied", "experience": 2, "education": "B.Sc Information Technology", "skills": ["React", "JavaScript", "Node.js"], "ats_score": 82, "screening_score": 78, "final_score": 80, "ai_recommendation": "Good candidate for frontend role.", "candidate_summary": "Frontend developer focused on modern web UI component design."},
-            {"name": "Vikas Kumar", "email": "vikas.kumar@example.com", "phone": "+91 98765 43212", "status": "Applied", "experience": 4, "education": "B.Tech Electronics", "skills": ["Python", "Django", "PostgreSQL"], "ats_score": 85, "screening_score": 80, "final_score": 82, "ai_recommendation": "Under Review.", "candidate_summary": "Backend specialist working with Django and SQL databases."},
-            {"name": "Kavita Reddy", "email": "kavita.reddy@example.com", "phone": "+91 98765 43213", "status": "Applied", "experience": 1, "education": "B.Tech Computer Science", "skills": ["Java", "Spring Boot", "MySQL"], "ats_score": 79, "screening_score": 75, "final_score": 77, "ai_recommendation": "Junior potential candidate.", "candidate_summary": "Recent graduate with strong Java OOP fundamentals."},
-
-            # Screening (3 total)
-            {"name": "Ananya Roy", "email": "ananya.roy@example.com", "phone": "+91 98765 43214", "status": "Screening", "experience": 5, "education": "M.Tech Data Science", "skills": ["Python", "LLM", "PyTorch", "NLP"], "ats_score": 93, "screening_score": 89, "final_score": 91, "ai_recommendation": "Strong Match for AI Engineer position.", "candidate_summary": "Experienced Data Scientist specializing in Large Language Models."},
-            {"name": "Sneha Gupta", "email": "sneha.gupta@example.com", "phone": "+91 98765 43215", "status": "Screening", "experience": 4, "education": "B.Tech Computer Science", "skills": ["React", "TypeScript", "Next.js", "TailwindCSS"], "ats_score": 90, "screening_score": 86, "final_score": 88, "ai_recommendation": "Highly suitable for Senior Frontend Lead.", "candidate_summary": "Frontend architect with expertise in modern web user experience."},
-            {"name": "Manish Patel", "email": "manish.patel@example.com", "phone": "+91 98765 43216", "status": "Screening", "experience": 6, "education": "B.E. Information Technology", "skills": ["Go", "Kubernetes", "Docker", "AWS"], "ats_score": 89, "screening_score": 87, "final_score": 88, "ai_recommendation": "DevOps & Cloud Engineer candidate.", "candidate_summary": "Cloud infrastructure engineer with automated CI/CD pipeline skills."},
-
-            # Interview (8 total)
-            {"name": "Priya Nair", "email": "priya.nair@example.com", "phone": "+91 98765 43217", "status": "Interview", "experience": 6, "education": "M.Tech Computer Science", "skills": ["Python", "FastAPI", "SQL", "Docker", "System Design"], "ats_score": 91, "screening_score": 84, "final_score": 88, "ai_recommendation": "Highly Recommended for Final Interview Round.", "candidate_summary": "Full Stack & System Architect candidate with 6 years experience in distributed systems."},
-            {"name": "Siddharth Das", "email": "siddharth.das@example.com", "phone": "+91 98765 43218", "status": "Interview", "experience": 5, "education": "B.Tech Computer Science", "skills": ["Python", "LangChain", "OpenAI", "FastAPI"], "ats_score": 92, "screening_score": 88, "final_score": 90, "ai_recommendation": "Proceed to Technical Interview.", "candidate_summary": "Generative AI Application Developer."},
-            {"name": "Deepak Mehta", "email": "deepak.mehta@example.com", "phone": "+91 98765 43219", "status": "Interview", "experience": 7, "education": "B.Tech Computer Science", "skills": ["Java", "Spring Cloud", "Kafka", "Microservices"], "ats_score": 89, "screening_score": 85, "final_score": 87, "ai_recommendation": "Senior Backend Candidate.", "candidate_summary": "Enterprise backend engineer with high-throughput event processing experience."},
-            {"name": "Neha Joshi", "email": "neha.joshi@example.com", "phone": "+91 98765 43220", "status": "Interview", "experience": 4, "education": "M.Sc Computer Application", "skills": ["React Native", "Flutter", "iOS", "Android"], "ats_score": 87, "screening_score": 83, "final_score": 85, "ai_recommendation": "Mobile Engineer Lead candidate.", "candidate_summary": "Cross-platform mobile developer."},
-            {"name": "Arjun Rao", "email": "arjun.rao@example.com", "phone": "+91 98765 43221", "status": "Interview", "experience": 8, "education": "B.Tech Computer Science", "skills": ["Python", "FastAPI", "AWS", "Terraform", "PostgreSQL"], "ats_score": 94, "screening_score": 90, "final_score": 92, "ai_recommendation": "Lead Engineer candidate.", "candidate_summary": "Senior engineering leader with cloud architecture background."},
-            {"name": "Divya Saxena", "email": "divya.saxena@example.com", "phone": "+91 98765 43222", "status": "Interview", "experience": 5, "education": "B.Tech Information Technology", "skills": ["Node.js", "GraphQL", "MongoDB", "Express"], "ats_score": 88, "screening_score": 84, "final_score": 86, "ai_recommendation": "Backend Node Developer.", "candidate_summary": "Full stack JavaScript & Node backend specialist."},
-            {"name": "Karthik Iyer", "email": "karthik.iyer@example.com", "phone": "+91 98765 43223", "status": "Interview", "experience": 6, "education": "B.Tech Electronics", "skills": ["C++", "Python", "Embedded Systems", "Linux"], "ats_score": 86, "screening_score": 82, "final_score": 84, "ai_recommendation": "Systems Engineer candidate.", "candidate_summary": "Systems developer working with low-level performance code."},
-            {"name": "Pooja Hegde", "email": "pooja.hegde@example.com", "phone": "+91 98765 43224", "status": "Interview", "experience": 3, "education": "B.Tech Computer Science", "skills": ["Vue.js", "JavaScript", "CSS3", "HTML5"], "ats_score": 85, "screening_score": 81, "final_score": 83, "ai_recommendation": "UI Developer candidate.", "candidate_summary": "Frontend developer focused on web accessibility and design systems."},
-
-            # Selected (3 total)
-            {"name": "Amit Singh", "email": "amit.singh@example.com", "phone": "+91 98765 43225", "status": "Selected", "experience": 8, "education": "M.Tech Software Engineering", "skills": ["Python", "System Design", "AWS", "FastAPI", "Leadership"], "ats_score": 96, "screening_score": 94, "final_score": 95, "ai_recommendation": "Selected for Staff Software Engineer Offer.", "candidate_summary": "Top tier candidate with exceptional system design and team leadership skills."},
-            {"name": "Ritu Agarwal", "email": "ritu.agarwal@example.com", "phone": "+91 98765 43226", "status": "Selected", "experience": 6, "education": "B.Tech Computer Science", "skills": ["React", "TypeScript", "Node.js", "GraphQL"], "ats_score": 95, "screening_score": 92, "final_score": 94, "ai_recommendation": "Selected for Principal Frontend Lead.", "candidate_summary": "Exceptional frontend lead engineer with product-driven mindset."},
-            {"name": "Suresh Pillai", "email": "suresh.pillai@example.com", "phone": "+91 98765 43227", "status": "Selected", "experience": 9, "education": "Ph.D. Computer Science", "skills": ["Python", "PyTorch", "LLM", "Deep Learning", "Transformers"], "ats_score": 98, "screening_score": 96, "final_score": 97, "ai_recommendation": "Selected for Principal AI Scientist Offer.", "candidate_summary": "Renowned AI researcher with patents in NLP and transformer optimization."},
-
-            # Shortlisted (12 total)
-            *[{
-                "name": f"Shortlisted Candidate {i}",
-                "email": f"shortlist_{i}@example.com",
-                "phone": f"+91 98765 {43228 + i}",
-                "status": "Shortlisted",
-                "experience": (i % 6) + 2,
-                "education": ["B.Tech Computer Science", "M.Tech Data Science", "B.Sc IT"][i % 3],
-                "skills": [["Python", "SQL"], ["React", "TypeScript"], ["FastAPI", "Docker"], ["AWS", "DevOps"]][i % 4],
-                "ats_score": 88 + (i % 8),
-                "screening_score": 83 + (i % 7),
-                "final_score": 86 + (i % 7),
-                "ai_recommendation": "Shortlisted for next round.",
-                "candidate_summary": f"Qualified shortlisted professional with {(i % 6) + 2} years of domain experience."
-            } for i in range(1, 13)],
-
-            # Rejected (20 total)
-            *[{
-                "name": f"Applicant {i}",
-                "email": f"rejected_{i}@example.com",
-                "phone": f"+91 98765 {43240 + i}",
-                "status": "Rejected",
-                "experience": i % 3,
-                "education": ["High School", "Diploma", "B.A. General"][i % 3],
-                "skills": [["MS Office", "Excel"], ["Basic HTML"], ["Customer Support"]][i % 3],
-                "ats_score": 40 + (i % 20),
-                "screening_score": 38 + (i % 20),
-                "final_score": 42 + (i % 20),
-                "ai_recommendation": "Does not meet minimum technical skill and experience requirements.",
-                "candidate_summary": "Candidate lacks required technical stack and core domain prerequisites."
-            } for i in range(1, 21)]
+        random.seed(42)
+        candidate_data = [
+            # Applied (7 candidates)
+            {"name": "Rahul Sharma", "email": "rahul.sharma@example.com", "phone": "9876543210", "education": "B.Tech Computer Science", "experience": 2, "skills": ["Python", "Django", "SQL"], "location": "Mumbai", "status": "Applied", "ats_score": 72.0, "match_score": 68.0, "screening_score": 70.0, "final_score": 70.0},
+            {"name": "Rohan Verma", "email": "rohan.verma@example.com", "phone": "9876543211", "education": "B.E. Electronics", "experience": 1, "skills": ["Java", "Spring Boot"], "location": "Pune", "status": "Applied", "ats_score": 65.0, "match_score": 60.0, "screening_score": 62.0, "final_score": 62.0},
+            {"name": "Kavya Nair", "email": "kavya.nair@example.com", "phone": "9876543220", "education": "MCA", "experience": 1, "skills": ["React", "JavaScript"], "location": "Kochi", "status": "Applied", "ats_score": 68.0, "match_score": 65.0, "screening_score": 66.0, "final_score": 66.0},
+            {"name": "Nikhil Joshi", "email": "nikhil.joshi@example.com", "phone": "9876543221", "education": "B.Sc IT", "experience": 0, "skills": ["HTML", "CSS", "JavaScript"], "location": "Nagpur", "status": "Applied", "ats_score": 55.0, "match_score": 52.0, "screening_score": 53.0, "final_score": 53.0},
+            {"name": "Pooja Singh", "email": "pooja.singh@example.com", "phone": "9876543222", "education": "B.Tech IT", "experience": 2, "skills": ["Node.js", "MongoDB", "Express"], "location": "Delhi", "status": "Applied", "ats_score": 74.0, "match_score": 70.0, "screening_score": 72.0, "final_score": 72.0},
+            {"name": "Arjun Patel", "email": "arjun.patel@example.com", "phone": "9876543223", "education": "B.E. CSE", "experience": 1, "skills": ["C++", "Algorithms"], "location": "Ahmedabad", "status": "Applied", "ats_score": 60.0, "match_score": 58.0, "screening_score": 59.0, "final_score": 59.0},
+            {"name": "Tanvi Desai", "email": "tanvi.desai@example.com", "phone": "9876543224", "education": "M.Tech CSE", "experience": 3, "skills": ["Data Science", "ML", "Python"], "location": "Surat", "status": "Applied", "ats_score": 78.0, "match_score": 75.0, "screening_score": 76.0, "final_score": 76.0},
+            # Screening (3 candidates)
+            {"name": "Vivek Reddy", "email": "vivek.reddy@example.com", "phone": "9876543212", "education": "B.Tech CSE", "experience": 2, "skills": ["SQL", "Python", "Tableau"], "location": "Hyderabad", "status": "Screening", "ats_score": 75.0, "match_score": 72.0, "screening_score": 73.0, "final_score": 73.0},
+            {"name": "Meera Krishnan", "email": "meera.krishnan@example.com", "phone": "9876543225", "education": "M.Sc Statistics", "experience": 2, "skills": ["R", "Python", "Statistics"], "location": "Chennai", "status": "Screening", "ats_score": 76.0, "match_score": 73.0, "screening_score": 74.0, "final_score": 74.0},
+            {"name": "Siddharth Roy", "email": "siddharth.roy@example.com", "phone": "9876543226", "education": "B.Tech ECE", "experience": 1, "skills": ["IoT", "Embedded C"], "location": "Kolkata", "status": "Screening", "ats_score": 66.0, "match_score": 63.0, "screening_score": 64.0, "final_score": 64.0},
+            # Shortlisted (12 candidates)
+            {"name": "Ananya Iyer", "email": "ananya.iyer@example.com", "phone": "9876543213", "education": "M.Tech AI", "experience": 3, "skills": ["Machine Learning", "TensorFlow", "Python"], "location": "Bangalore", "status": "Shortlisted", "ats_score": 88.0, "match_score": 85.0, "screening_score": 86.0, "final_score": 86.0},
+            {"name": "Sneha Kulkarni", "email": "sneha.kulkarni@example.com", "phone": "9876543214", "education": "B.Tech CSE", "experience": 4, "skills": ["React", "Node.js", "MongoDB"], "location": "Pune", "status": "Shortlisted", "ats_score": 85.0, "match_score": 82.0, "screening_score": 83.0, "final_score": 83.0},
+            {"name": "Karan Mehta", "email": "karan.mehta@example.com", "phone": "9876543227", "education": "B.E. IT", "experience": 3, "skills": ["AWS", "DevOps", "Docker"], "location": "Mumbai", "status": "Shortlisted", "ats_score": 82.0, "match_score": 80.0, "screening_score": 81.0, "final_score": 81.0},
+            {"name": "Richa Gupta", "email": "richa.gupta@example.com", "phone": "9876543228", "education": "MCA", "experience": 2, "skills": ["Java", "Spring", "Hibernate"], "location": "Delhi", "status": "Shortlisted", "ats_score": 80.0, "match_score": 77.0, "screening_score": 78.0, "final_score": 78.0},
+            {"name": "Dhruv Malhotra", "email": "dhruv.malhotra@example.com", "phone": "9876543229", "education": "B.Tech CSE", "experience": 5, "skills": ["Python", "Django", "PostgreSQL", "Redis"], "location": "Hyderabad", "status": "Shortlisted", "ats_score": 90.0, "match_score": 88.0, "screening_score": 89.0, "final_score": 89.0},
+            {"name": "Ishita Banerjee", "email": "ishita.banerjee@example.com", "phone": "9876543230", "education": "M.Tech Data Science", "experience": 3, "skills": ["PyTorch", "NLP", "Python"], "location": "Bangalore", "status": "Shortlisted", "ats_score": 87.0, "match_score": 84.0, "screening_score": 85.0, "final_score": 85.0},
+            {"name": "Ravi Shankar", "email": "ravi.shankar@example.com", "phone": "9876543231", "education": "B.E. CSE", "experience": 4, "skills": ["Kubernetes", "CI/CD", "Linux"], "location": "Chennai", "status": "Shortlisted", "ats_score": 83.0, "match_score": 81.0, "screening_score": 82.0, "final_score": 82.0},
+            {"name": "Sonam Tiwari", "email": "sonam.tiwari@example.com", "phone": "9876543232", "education": "B.Tech IT", "experience": 2, "skills": ["Vue.js", "JavaScript", "CSS"], "location": "Jaipur", "status": "Shortlisted", "ats_score": 79.0, "match_score": 76.0, "screening_score": 77.0, "final_score": 77.0},
+            {"name": "Aditya Kumar", "email": "aditya.kumar@example.com", "phone": "9876543233", "education": "B.Sc Computer Science", "experience": 3, "skills": ["Angular", "TypeScript", "RxJS"], "location": "Noida", "status": "Shortlisted", "ats_score": 81.0, "match_score": 79.0, "screening_score": 80.0, "final_score": 80.0},
+            {"name": "Prerna Jain", "email": "prerna.jain@example.com", "phone": "9876543234", "education": "M.E. Software Engineering", "experience": 4, "skills": ["Microservices", "Java", "Kafka"], "location": "Pune", "status": "Shortlisted", "ats_score": 86.0, "match_score": 83.0, "screening_score": 84.0, "final_score": 84.0},
+            {"name": "Manish Rao", "email": "manish.rao@example.com", "phone": "9876543235", "education": "B.Tech CSE", "experience": 2, "skills": ["Flutter", "Dart", "Firebase"], "location": "Bangalore", "status": "Shortlisted", "ats_score": 77.0, "match_score": 75.0, "screening_score": 76.0, "final_score": 76.0},
+            {"name": "Swati Pandey", "email": "swati.pandey@example.com", "phone": "9876543236", "education": "MCA", "experience": 3, "skills": ["Selenium", "QA", "Python"], "location": "Lucknow", "status": "Shortlisted", "ats_score": 78.0, "match_score": 76.0, "screening_score": 77.0, "final_score": 77.0},
+            # Interview (8 candidates)
+            {"name": "Priya Menon", "email": "priya.menon@example.com", "phone": "9876543215", "education": "B.Tech CSE", "experience": 5, "skills": ["Python", "FastAPI", "PostgreSQL", "Docker"], "location": "Bangalore", "status": "Interview Scheduled", "ats_score": 91.0, "match_score": 87.0, "screening_score": 84.0, "final_score": 88.0},
+            {"name": "Gaurav Mishra", "email": "gaurav.mishra@example.com", "phone": "9876543237", "education": "M.Tech CSE", "experience": 4, "skills": ["ML", "Deep Learning", "Python"], "location": "Delhi", "status": "Interview Scheduled", "ats_score": 89.0, "match_score": 86.0, "screening_score": 87.0, "final_score": 87.0},
+            {"name": "Nisha Agarwal", "email": "nisha.agarwal@example.com", "phone": "9876543238", "education": "B.E. CSE", "experience": 3, "skills": ["Full Stack", "React", "Node.js"], "location": "Mumbai", "status": "Interview Scheduled", "ats_score": 86.0, "match_score": 83.0, "screening_score": 84.0, "final_score": 84.0},
+            {"name": "Rajesh Pillai", "email": "rajesh.pillai@example.com", "phone": "9876543239", "education": "B.Tech IT", "experience": 6, "skills": ["Java", "Microservices", "AWS", "Kubernetes"], "location": "Hyderabad", "status": "Interview Scheduled", "ats_score": 92.0, "match_score": 89.0, "screening_score": 90.0, "final_score": 90.0},
+            {"name": "Shruti Kapoor", "email": "shruti.kapoor@example.com", "phone": "9876543240", "education": "MCA", "experience": 4, "skills": ["Android", "Kotlin", "Java"], "location": "Noida", "status": "Interview Scheduled", "ats_score": 84.0, "match_score": 81.0, "screening_score": 82.0, "final_score": 82.0},
+            {"name": "Varun Saxena", "email": "varun.saxena@example.com", "phone": "9876543241", "education": "B.Tech CSE", "experience": 5, "skills": ["Cloud", "GCP", "Terraform"], "location": "Bangalore", "status": "Interview Scheduled", "ats_score": 88.0, "match_score": 85.0, "screening_score": 86.0, "final_score": 86.0},
+            {"name": "Anjali Srivastava", "email": "anjali.srivastava@example.com", "phone": "9876543242", "education": "M.Tech AI", "experience": 3, "skills": ["NLP", "BERT", "Python"], "location": "Chennai", "status": "Interview Scheduled", "ats_score": 87.0, "match_score": 84.0, "screening_score": 85.0, "final_score": 85.0},
+            {"name": "Mohit Choudhary", "email": "mohit.choudhary@example.com", "phone": "9876543243", "education": "B.E. IT", "experience": 4, "skills": ["DevSecOps", "Docker", "Python"], "location": "Jaipur", "status": "Interview Scheduled", "ats_score": 85.0, "match_score": 82.0, "screening_score": 83.0, "final_score": 83.0},
+            # Selected (3 candidates)
+            {"name": "Amit Bose", "email": "amit.bose@example.com", "phone": "9876543216", "education": "M.Tech CSE", "experience": 7, "skills": ["Python", "ML", "Data Science", "SQL", "TensorFlow"], "location": "Bangalore", "status": "Selected", "ats_score": 95.0, "match_score": 92.0, "screening_score": 93.0, "final_score": 93.0},
+            {"name": "Deepika Nanda", "email": "deepika.nanda@example.com", "phone": "9876543244", "education": "B.Tech CSE", "experience": 6, "skills": ["Full Stack", "React", "Python", "AWS"], "location": "Hyderabad", "status": "Selected", "ats_score": 93.0, "match_score": 91.0, "screening_score": 92.0, "final_score": 92.0},
+            {"name": "Suresh Natarajan", "email": "suresh.natarajan@example.com", "phone": "9876543245", "education": "M.E. Software Engineering", "experience": 8, "skills": ["Architecture", "Java", "Microservices", "Kafka", "Redis"], "location": "Chennai", "status": "Selected", "ats_score": 96.0, "match_score": 94.0, "screening_score": 95.0, "final_score": 95.0},
+            # Rejected (20 candidates)
+            {"name": "Ramesh Babu", "email": "ramesh.babu@example.com", "phone": "9876543217", "education": "B.Sc", "experience": 0, "skills": ["MS Office"], "location": "Vizag", "status": "Rejected", "ats_score": 32.0, "match_score": 28.0, "screening_score": 30.0, "final_score": 30.0},
+            {"name": "Geeta Sharma", "email": "geeta.sharma@example.com", "phone": "9876543218", "education": "BA English", "experience": 0, "skills": ["Communication"], "location": "Bhopal", "status": "Rejected", "ats_score": 25.0, "match_score": 22.0, "screening_score": 23.0, "final_score": 23.0},
+            {"name": "Sunil Yadav", "email": "sunil.yadav@example.com", "phone": "9876543219", "education": "B.Com", "experience": 1, "skills": ["Tally", "Accounting"], "location": "Indore", "status": "Rejected", "ats_score": 28.0, "match_score": 25.0, "screening_score": 26.0, "final_score": 26.0},
+            {"name": "Lalitha Subramaniam", "email": "lalitha.subramaniam@example.com", "phone": "9876543246", "education": "B.Sc Maths", "experience": 0, "skills": ["Excel"], "location": "Coimbatore", "status": "Rejected", "ats_score": 20.0, "match_score": 18.0, "screening_score": 19.0, "final_score": 19.0},
+            {"name": "Prakash Tiwari", "email": "prakash.tiwari@example.com", "phone": "9876543247", "education": "B.E. Mechanical", "experience": 2, "skills": ["AutoCAD"], "location": "Kanpur", "status": "Rejected", "ats_score": 35.0, "match_score": 30.0, "screening_score": 32.0, "final_score": 32.0},
+            {"name": "Rekha Sinha", "email": "rekha.sinha@example.com", "phone": "9876543248", "education": "M.A. Economics", "experience": 0, "skills": ["Research"], "location": "Patna", "status": "Rejected", "ats_score": 22.0, "match_score": 19.0, "screening_score": 20.0, "final_score": 20.0},
+            {"name": "Mohan Das", "email": "mohan.das@example.com", "phone": "9876543249", "education": "B.Tech Civil", "experience": 1, "skills": ["AutoCAD", "Revit"], "location": "Bhubaneswar", "status": "Rejected", "ats_score": 30.0, "match_score": 27.0, "screening_score": 28.0, "final_score": 28.0},
+            {"name": "Kavitha Rajan", "email": "kavitha.rajan@example.com", "phone": "9876543250", "education": "MBA HR", "experience": 3, "skills": ["HR", "Recruitment"], "location": "Bangalore", "status": "Rejected", "ats_score": 40.0, "match_score": 35.0, "screening_score": 37.0, "final_score": 37.0},
+            {"name": "Sanjay Kumar", "email": "sanjay.kumar@example.com", "phone": "9876543251", "education": "B.Tech EEE", "experience": 2, "skills": ["MATLAB", "Electrical"], "location": "Coimbatore", "status": "Rejected", "ats_score": 33.0, "match_score": 29.0, "screening_score": 31.0, "final_score": 31.0},
+            {"name": "Asha Reddy", "email": "asha.reddy@example.com", "phone": "9876543252", "education": "B.Sc Chemistry", "experience": 0, "skills": ["Lab Research"], "location": "Hyderabad", "status": "Rejected", "ats_score": 18.0, "match_score": 15.0, "screening_score": 16.0, "final_score": 16.0},
+            {"name": "Vijay Anand", "email": "vijay.anand@example.com", "phone": "9876543253", "education": "B.Tech Mechanical", "experience": 3, "skills": ["SolidWorks", "Manufacturing"], "location": "Pune", "status": "Rejected", "ats_score": 38.0, "match_score": 34.0, "screening_score": 36.0, "final_score": 36.0},
+            {"name": "Poonam Chauhan", "email": "poonam.chauhan@example.com", "phone": "9876543254", "education": "B.Sc Physics", "experience": 0, "skills": ["Teaching"], "location": "Jaipur", "status": "Rejected", "ats_score": 21.0, "match_score": 17.0, "screening_score": 19.0, "final_score": 19.0},
+            {"name": "Arun Pillai", "email": "arun.pillai@example.com", "phone": "9876543255", "education": "Diploma Engineering", "experience": 1, "skills": ["Welding", "Fitting"], "location": "Kochi", "status": "Rejected", "ats_score": 27.0, "match_score": 23.0, "screening_score": 25.0, "final_score": 25.0},
+            {"name": "Nandini Saxena", "email": "nandini.saxena@example.com", "phone": "9876543256", "education": "M.A. History", "experience": 0, "skills": ["Writing"], "location": "Agra", "status": "Rejected", "ats_score": 15.0, "match_score": 12.0, "screening_score": 13.0, "final_score": 13.0},
+            {"name": "Balu Krishnamurthy", "email": "balu.krishnamurthy@example.com", "phone": "9876543257", "education": "B.Tech CSE", "experience": 0, "skills": ["C", "C++"], "location": "Coimbatore", "status": "Rejected", "ats_score": 45.0, "match_score": 40.0, "screening_score": 42.0, "final_score": 42.0},
+            {"name": "Mala Srivastav", "email": "mala.srivastav@example.com", "phone": "9876543258", "education": "B.Com", "experience": 2, "skills": ["Finance", "GST"], "location": "Lucknow", "status": "Rejected", "ats_score": 29.0, "match_score": 24.0, "screening_score": 26.0, "final_score": 26.0},
+            {"name": "Harish Gowda", "email": "harish.gowda@example.com", "phone": "9876543259", "education": "Diploma CSE", "experience": 1, "skills": ["PHP", "MySQL"], "location": "Mysuru", "status": "Rejected", "ats_score": 42.0, "match_score": 38.0, "screening_score": 40.0, "final_score": 40.0},
+            {"name": "Shilpa Verma", "email": "shilpa.verma@example.com", "phone": "9876543260", "education": "BCA", "experience": 0, "skills": ["VB.NET", "MS Access"], "location": "Gwalior", "status": "Rejected", "ats_score": 31.0, "match_score": 27.0, "screening_score": 29.0, "final_score": 29.0},
+            {"name": "Rajiv Mathew", "email": "rajiv.mathew@example.com", "phone": "9876543261", "education": "B.Tech IT", "experience": 1, "skills": ["Basic Python"], "location": "Thiruvananthapuram", "status": "Rejected", "ats_score": 48.0, "match_score": 44.0, "screening_score": 46.0, "final_score": 46.0},
+            {"name": "Divya Prabhu", "email": "divya.prabhu@example.com", "phone": "9876543262", "education": "BBA", "experience": 0, "skills": ["Marketing", "Social Media"], "location": "Mangalore", "status": "Rejected", "ats_score": 17.0, "match_score": 13.0, "screening_score": 15.0, "final_score": 15.0},
         ]
 
-        for cand_info in prompt_candidates:
-            existing = db.query(Candidate).filter(Candidate.email == cand_info["email"]).first()
+        for data in candidate_data:
+            existing = db.query(Candidate).filter(Candidate.email == data["email"]).first()
             if not existing:
-                cand = Candidate(
-                    name=cand_info["name"],
-                    email=cand_info["email"],
-                    phone=cand_info["phone"],
-                    status=cand_info["status"],
-                    experience=cand_info.get("experience", 2),
-                    education=cand_info.get("education", "B.Tech Computer Science"),
-                    skills=cand_info.get("skills", []),
-                    projects=["Project Alpha", "Cloud Platform Initiative"],
-                    notice_period="30 Days",
-                    expected_ctc="15 LPA",
-                    location="Mumbai / Hybrid",
-                    ats_score=cand_info.get("ats_score", 85),
-                    screening_score=cand_info.get("screening_score", 80),
-                    final_score=cand_info.get("final_score", 82),
-                    strengths=["Strong problem solving", "Solid core foundation", "Collaborative communicator"],
-                    weaknesses=["Could gain deeper experience in enterprise Kubernetes clustering"],
-                    ai_recommendation=cand_info.get("ai_recommendation", "Evaluated by AI Engine."),
-                    candidate_summary=cand_info.get("candidate_summary", "Candidate profile evaluated."),
-                    screening_responses=[
-                        {"question": "What is your primary programming stack?", "response": "Python, FastAPI, and PostgreSQL.", "score": 90},
-                        {"question": "How do you approach code quality & unit tests?", "response": "Strict TDD using pytest and automated CI/CD integration.", "score": 88}
-                    ],
-                    feedback="Preliminary recruiter screening notes: Candidate demonstrated strong problem solving capabilities."
-                )
-                db.add(cand)
+                candidate = Candidate(**data)
+                db.add(candidate)
         db.commit()
-        logger.info("Successfully seeded 50 candidates.")
+        logger.info(f"Seeded {len(candidate_data)} demo candidates for A2 Recruiter Dashboard.")
     except Exception as e:
-        logger.error(f"Seeding candidates failed: {str(e)}")
+        logger.error(f"Candidate seeding failed: {str(e)}")
         db.rollback()
     finally:
         db.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create tables and seed test users & candidates
+    # Startup: Create tables, run migrations, and seed test users
     logger.info("Application starting up... Initializing database tables.")
     Base.metadata.create_all(bind=engine)
+    try:
+        run_db_migrations()
+    except Exception as e:
+        logger.error(f"Failed to run database migrations: {str(e)}")
     seed_users()
     seed_candidates()
     logger.info("Database tables initialized and seeded successfully.")
     yield
+
     # Shutdown: Clean up if needed
     logger.info("Application shutting down...")
 
 app = FastAPI(
     title="RecruiterAI API",
-    description="Backend API for candidate resumes and jobs screening",
+    description="Backend API for candidate resumes, jobs screening, interview scheduling, and candidate status management.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -208,8 +186,11 @@ app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(candidates.router)
 app.include_router(interviews.router)
-app.include_router(communication.router)
+app.include_router(emails.router)
+app.include_router(monitoring.router)
+app.include_router(ai.router)
+app.include_router(tools.router)
 
 @app.get("/")
-def health_check():
-    return {"status": "healthy", "service": "RecruiterAI API"}
+def home():
+    return {"status": "healthy", "service": "RecruiterAI API", "version": "1.0.0"}

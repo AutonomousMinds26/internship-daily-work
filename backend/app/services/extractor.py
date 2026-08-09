@@ -105,13 +105,15 @@ def extract_candidate_info(text: str) -> dict:
         "Redis"
     ]
 
+    skills_found: list[str] = []
     for skill in skill_database:
         # Check skill using case-insensitive word-boundary
         pattern = rf'\b{re.escape(skill.lower())}\b'
         if skill == "C++":
             pattern = r'c\+\+'
         if re.search(pattern, text.lower()):
-            candidate["skills"].append(skill)
+            skills_found.append(skill)
+    candidate["skills"] = skills_found
 
     # ---------- Location, Notice, CTC ----------
     loc_match = re.search(r'location\s*:\s*([^\n]+)', text, re.IGNORECASE)

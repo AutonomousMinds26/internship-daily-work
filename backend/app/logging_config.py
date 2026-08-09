@@ -39,8 +39,21 @@ def setup_logging():
     error_log_handler.setLevel(logging.WARNING)
     root_logger.addHandler(error_log_handler)
 
+    # Dedicated File Handler for AI Processing logs (ai_processing.log)
+    ai_logger = logging.getLogger("ai_processing")
+    ai_logger.setLevel(logging.INFO)
+    ai_log_handler = RotatingFileHandler(
+        "ai_processing.log", maxBytes=10485760, backupCount=5
+    )
+    ai_log_handler.setFormatter(formatter)
+    ai_logger.addHandler(ai_log_handler)
+
     # Reduce log noise from third-party libs
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
-    logging.info("Logging successfully initialized.")
+    logging.info("Logging successfully initialized with app.log, error.log, and ai_processing.log.")
+
+def get_ai_logger():
+    return logging.getLogger("ai_processing")
+

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -9,13 +9,12 @@ class UserCreate(BaseModel):
     role: str = Field(..., description="Must be one of: Recruiter, Hiring Manager, Admin")
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     role: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class UserLogin(BaseModel):
     username: str
@@ -38,15 +37,14 @@ class JobCreate(BaseModel):
     experience_required: int = 0
 
 class JobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str
     requirements: List[str]
     experience_required: int
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 # --- Candidate Schemas ---
 class CandidateCreate(BaseModel):
@@ -62,17 +60,24 @@ class CandidateCreate(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: Optional[str] = "Applied"
-    ats_score: Optional[int] = 85
-    screening_score: Optional[int] = 80
-    final_score: Optional[int] = 82
-    strengths: Optional[List[str]] = []
-    weaknesses: Optional[List[str]] = []
-    ai_recommendation: Optional[str] = None
-    candidate_summary: Optional[str] = None
-    screening_responses: Optional[List[dict]] = []
-    feedback: Optional[str] = None
+
+class CandidateUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    education: Optional[str] = None
+    experience: Optional[int] = None
+    skills: Optional[List[str]] = None
+    projects: Optional[List[str]] = None
+    notice_period: Optional[str] = None
+    expected_ctc: Optional[str] = None
+    location: Optional[str] = None
+    resume_text: Optional[str] = None
+    status: Optional[str] = None
 
 class CandidateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     email: EmailStr
@@ -86,25 +91,18 @@ class CandidateResponse(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: str
-    ats_score: Optional[int] = 85
-    screening_score: Optional[int] = 80
-    final_score: Optional[int] = 82
-    strengths: Optional[List[str]] = []
-    weaknesses: Optional[List[str]] = []
-    ai_recommendation: Optional[str] = None
-    candidate_summary: Optional[str] = None
-    screening_responses: Optional[List[dict]] = []
-    feedback: Optional[str] = None
     created_at: datetime
+    ai_summary: Optional[str] = None
+    resume_hash: Optional[str] = None
+    ats_score: Optional[float] = 0.0
+    match_score: Optional[float] = 0.0
+    screening_score: Optional[float] = 0.0
+    final_score: Optional[float] = 0.0
+    ats_details: Optional[dict] = None
 
-    class Config:
-        from_attributes = True
 
 class CandidateStatusUpdate(BaseModel):
     status: str
-
-class CandidateFeedbackUpdate(BaseModel):
-    feedback: str
 
 
 # --- Score/Match Schemas ---
@@ -118,42 +116,279 @@ class ScoreResponse(BaseModel):
     job_id: int
     match_score: float
     details: MatchDetails
+    skill_gap_report: Optional[dict] = None
+
+class UploadResumeResponse(BaseModel):
+    candidate: str
+    email: str
+    match_percentage: int
+    matched_skills: List[str]
+    missing_skills: List[str]
+    strengths: List[str] = []
+    weaknesses: List[str] = []
+    recommendation: str
+    id: Optional[int] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    experience: Optional[int] = 0
+    skills: Optional[List[str]] = []
+    location: Optional[str] = None
+    notice_period: Optional[str] = None
+    expected_ctc: Optional[str] = None
+    status: Optional[str] = None
+    ai_summary: Optional[str] = None
+    resume_hash: Optional[str] = None
+    ats_score: Optional[float] = 0.0
+    match_score: Optional[float] = 0.0
+    screening_score: Optional[float] = 0.0
+    final_score: Optional[float] = 0.0
+    ats_details: Optional[dict] = None
+
 
 
 # --- Interview Schemas ---
 class InterviewCreate(BaseModel):
     candidate_id: int
-    interview_date: str  # YYYY-MM-DD
-    interview_time: str  # HH:MM
+    job_id: int
     interviewer_name: str
-    platform: str  # Google Meet / Microsoft Teams / Zoom
+    interviewer_email: EmailStr
+    scheduled_time: str
+    duration_minutes: Optional[int] = 45
+    mode: Optional[str] = "Online"
+    meeting_link: Optional[str] = None
+    notes: Optional[str] = None
+
+class InterviewUpdate(BaseModel):
+    interviewer_name: Optional[str] = None
+    interviewer_email: Optional[EmailStr] = None
+    scheduled_time: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    mode: Optional[str] = None
+    meeting_link: Optional[str] = None
+    status: Optional[str] = None
     notes: Optional[str] = None
 
 class InterviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     candidate_id: int
-    candidate_name: str
-    candidate_email: str
-    interview_date: str
-    interview_time: str
+    job_id: int
     interviewer_name: str
-    platform: str
+    interviewer_email: EmailStr
+    scheduled_time: str
+    duration_minutes: int
+    mode: str
+    meeting_link: Optional[str] = None
     status: str
     notes: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
-# --- Communication Schemas ---
+# --- Email Communication Schemas ---
 class EmailRequest(BaseModel):
     candidate_id: int
-    custom_message: Optional[str] = None
+    subject: Optional[str] = None
+    message: Optional[str] = None
 
 class EmailResponse(BaseModel):
     success: bool
-    message: str
     candidate_id: int
     email_type: str
-    recipient_email: str
+    recipient: str
+    message: str
+    timestamp: datetime
+
+# --- Candidate History Schemas ---
+class CandidateHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    candidate_id: int
+    action: str
+    details: Optional[str] = None
+    performed_by: Optional[str] = None
+    created_at: datetime
+
+# --- Monitoring Schemas ---
+class HealthResponse(BaseModel):
+    status: str
+    database: str
+    redis: str
+
+class StatusResponse(BaseModel):
+    status: str
+    service: str
+    version: str
+    total_users: int
+    total_candidates: int
+    total_jobs: int
+    total_interviews: int
+
+class MetricsResponse(BaseModel):
+    total_candidates: int
+    candidates_by_status: dict
+    total_jobs: int
+    total_interviews: int
+    total_scores: int
+
+# --- New Table & AI Responses Schemas ---
+
+class InterviewQuestionCreate(BaseModel):
+    candidate_id: int
+    job_id: int
+    question: str
+    expected_answer: Optional[str] = None
+    category: Optional[str] = "Technical"
+
+class InterviewQuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    candidate_id: int
+    job_id: int
+    question: str
+    expected_answer: Optional[str] = None
+    category: Optional[str] = None
+    created_at: datetime
+
+class InterviewSlotCreate(BaseModel):
+    interviewer_name: str
+    interviewer_email: EmailStr
+    start_time: datetime
+    end_time: datetime
+
+class InterviewSlotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    interviewer_name: str
+    interviewer_email: EmailStr
+    start_time: datetime
+    end_time: datetime
+    is_booked: bool
+    interview_id: Optional[int] = None
+
+class SlotBookRequest(BaseModel):
+    candidate_id: int
+    job_id: int
+
+# --- AI API Responses ---
+
+class AISummaryResponse(BaseModel):
+    candidate_id: int
+    name: str
+    ai_summary: str
+
+class SkillGapResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    matched_skills: List[str]
+    missing_skills: List[str]
+    experience_gap: int
+    recommendations: List[str]
+
+class InterviewQuestionsResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    questions: List[InterviewQuestionResponse]
+
+class ExplainableRecommendationResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    recommendation: str
+    strengths: List[str]
+    weaknesses: List[str]
+    justification: str
+
+class SemanticMatchResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    semantic_score: float
+    matching_highlights: List[str]
+
+# --- Analytics Response Schemas ---
+
+class LocationDistributionResponse(BaseModel):
+    location_distribution: dict
+
+class ExperienceDistributionResponse(BaseModel):
+    experience_distribution: dict
+
+class EducationDistributionResponse(BaseModel):
+    education_distribution: dict
+
+class FunnelResponse(BaseModel):
+    hiring_funnel: dict
+
+class DiversityResponse(BaseModel):
+    gender_distribution: dict
+    university_distribution: dict
+
+# --- Recruitment Tools Response Schemas ---
+
+class ResumeScreeningResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    passed_screening: bool
+    experience_check: bool
+    skills_match_percentage: float
+    reasons: List[str]
+
+class AssessmentQuestion(BaseModel):
+    question: str
+    category: str
+    difficulty: str
+
+class AssessmentGenerateResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    test_id: str
+    assessment_questions: List[AssessmentQuestion]
+
+class AssessmentEvaluateRequest(BaseModel):
+    candidate_id: int
+    job_id: int
+    answers: List[dict] # List of {"question": "...", "answer": "..."}
+
+class AssessmentEvaluateResponse(BaseModel):
+    candidate_id: int
+    job_id: int
+    score: float
+    passed: bool
+    evaluation_summary: str
+
+
+# --- A2-2. Screening Questionnaire & Evaluation Schemas ---
+
+class ScreeningQuestionnaireRequest(BaseModel):
+    candidate_id: int
+    job_id: int
+
+class ScreeningQuestionnaireResponse(BaseModel):
+    technical_questions: List[str]
+    experience_questions: List[str]
+    availability_questions: List[str]
+    salary_questions: List[str]
+    location_questions: List[str]
+
+class ScreeningEvaluateRequest(BaseModel):
+    candidate_id: int
+    question: str
+    answer: str
+
+class ScreeningEvaluateResponse(BaseModel):
+    score: int
+    relevance: str
+    concerns: List[str]
+    explanation: str
+    final_score: float
+
+class FeedbackAnalysisRequest(BaseModel):
+    candidate_id: int
+    feedbacks: Optional[List[dict]] = None
+
+class FeedbackAnalysisResponse(BaseModel):
+    average_rating: float
+    positive_points: List[str]
+    concerns: List[str]
+    overall_feedback: str

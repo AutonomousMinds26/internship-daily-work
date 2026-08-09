@@ -1,0 +1,15 @@
+{
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": [
+        "backend",
+        "backend/AI"
+      ]
+    }
+  ],
+  "extraPaths": [
+    "backend",
+    "backend/AI"
+  ]
+}

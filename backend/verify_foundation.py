@@ -1,7 +1,8 @@
 import os
 from fastapi.testclient import TestClient
-from database import SessionLocal, Base, engine
-import models
+from database.database import SessionLocal, Base, engine
+import database.models as models
+from typing import cast, Any
 
 # Force create database tables on clean verify db
 Base.metadata.drop_all(bind=engine)
@@ -69,8 +70,9 @@ def verify_all():
     # Verify score is saved in database
     db = SessionLocal()
     updated_cand = db.query(models.Candidate).filter(models.Candidate.id == cand_id).first()
+    assert updated_cand is not None
     print("Saved Candidate Score in DB:", updated_cand.score)
-    assert updated_cand.score == 66.67
+    assert float(cast(Any, updated_cand).score) == 66.67
     db.close()
 
     print("🎉 Verification Successful! Everything is working correctly.")
