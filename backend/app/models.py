@@ -34,6 +34,12 @@ class Candidate(Base):
     # Extended database enhancement fields
     ai_summary = Column(Text, nullable=True)
     resume_hash = Column(String, unique=True, index=True, nullable=True)
+    ats_score = Column(Float, default=0.0)
+    match_score = Column(Float, default=0.0)
+    screening_score = Column(Float, default=0.0)
+    final_score = Column(Float, default=0.0)
+    ats_details = Column(JSON, nullable=True)
+
 
     resumes = relationship("Resume", back_populates="candidate", cascade="all, delete-orphan")
     scores = relationship("CandidateScore", back_populates="candidate", cascade="all, delete-orphan")

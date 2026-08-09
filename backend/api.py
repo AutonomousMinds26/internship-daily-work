@@ -230,15 +230,17 @@ async def screen_resume(
     # 1. Save upload file
     upload_dir = "sample_resumes"
     os.makedirs(upload_dir, exist_ok=True)
-    resume_path = os.path.join(upload_dir, file.filename)
+    filename = file.filename or "resume.txt"
+    resume_path = os.path.join(upload_dir, filename)
     
     with open(resume_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
     # Read text
     text = ""
-    filename = file.filename.lower()
-    if filename.endswith(".pdf"):
+    filename_lower = filename.lower()
+    if filename_lower.endswith(".pdf"):
+
         try:
             doc = fitz.open(resume_path)
             for page in doc:
@@ -271,8 +273,9 @@ async def screen_resume(
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         candidate_info["name"] = lines[0] if lines else "Unknown Candidate"
         # Email fallback
+        import time
         email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
-        candidate_info["email"] = email_match.group(0) if email_match else f"unknown_{int(datetime.utcnow().timestamp())}@example.com"
+        candidate_info["email"] = email_match.group(0) if email_match else f"unknown_{int(time.time())}@example.com"
         # Phone fallback
         phone_match = re.search(r'\+?\d[\d -]{8,12}\d', text)
         candidate_info["phone"] = phone_match.group(0) if phone_match else None
@@ -291,10 +294,12 @@ async def screen_resume(
         candidate_info["expected_ctc"] = "Not Available"
         candidate_info["location"] = "Not Available"
 
+    import time
     name = candidate_info.get("name") or "Unknown Candidate"
-    email = candidate_info.get("email") or f"unknown_{int(datetime.utcnow().timestamp())}@example.com"
+    email = candidate_info.get("email") or f"unknown_{int(time.time())}@example.com"
     phone = candidate_info.get("phone")
-    education_val = candidate_info.get("education") or "Not Available"
+    education_val = str(candidate_info.get("education") or "Not Available")
+
     
     # Process experience field
     raw_exp = candidate_info.get("experience", 0)
@@ -319,17 +324,8 @@ async def screen_resume(
     expected_ctc_val = candidate_info.get("expected_ctc") or "Not Available"
     location_val = candidate_info.get("location") or "Not Available"
 
-    # 3. Calculate ATS Score
-    # Check completeness of basic sections
-    ats_score = 0.0
-    if name and name != "Unknown Candidate": ats_score += 10
-    if email and "@" in email: ats_score += 10
-    if phone: ats_score += 10
-    if skills_list and len(skills_list) >= 3: ats_score += 25
-    elif skills_list: ats_score += 15
-    if experience_years > 0: ats_score += 20
-    if education_val and education_val != "Not Available": ats_score += 15
-    if projects_list: ats_score += 10
+    # ATS score will be calculated below after job_dict is constructed
+
     
     # 4. Fetch Job and Calculate Match Score
     job = None
@@ -374,8 +370,16 @@ async def screen_resume(
         "salary_range": job.salary_range
     }
     
+    # Calculate ATS score using ats_analyzer
+    from AI.ats_analyzer import analyze_ats
+    cand_dict_ats = dict(cand_dict)
+    cand_dict_ats["resume_text"] = text
+    ats_res = analyze_ats(cand_dict_ats, job_dict)
+    ats_score = float(ats_res.get("ats_score", 0.0))
+
     score_details = calculate_enhanced_score(cand_dict, job_dict)
     match_score = float(score_details.get("match_percentage", 50.0))
+
 
     # 5. Calculate Screening Score
     screening_score = 0.0
@@ -433,24 +437,32 @@ async def screen_resume(
     }
 
     # Check if candidate exists, update if so, otherwise create
-    existing_cand = crud.get_candidate_by_email(db, email)
+    email_str = str(email)
+    existing_cand = crud.get_candidate_by_email(db, email_str)
     if existing_cand:
-        db_candidate = crud.update_candidate(db, existing_cand.id, candidate_db_data)
+        db_candidate = crud.update_candidate(db, cast(Any, existing_cand.id), candidate_db_data)
     else:
         db_candidate = crud.create_candidate(db, candidate_db_data)
 
+    if not db_candidate:
+        raise HTTPException(status_code=500, detail="Failed to save candidate to database")
+
+    db_cand = cast(Any, db_candidate)
     return {
-        "candidate_id": db_candidate.id,
-        "name": db_candidate.name,
-        "email": db_candidate.email,
-        "phone": db_candidate.phone,
-        "ats_score": db_candidate.ats_score,
-        "match_score": db_candidate.match_score,
-        "screening_score": db_candidate.screening_score,
-        "final_score": db_candidate.final_score,
-        "status": db_candidate.status,
+        "candidate_id": db_cand.id,
+        "name": db_cand.name,
+        "email": db_cand.email,
+        "phone": db_cand.phone,
+        "ats_score": db_cand.ats_score,
+        "match_score": db_cand.match_score,
+        "screening_score": db_cand.screening_score,
+        "final_score": db_cand.final_score,
+        "status": db_cand.status,
         "extracted_info": candidate_info
     }
+
+
+
 
 # --- A2-8. Recruitment Reports API ---
 
@@ -499,10 +511,11 @@ def match_candidate(candidate_id: int, job_id: int, db: Session = Depends(get_db
     match_percentage = calculate_skill_match(str(candidate.skills or ""), str(job.required_skills or ""))
     recommendation = get_matching_recommendation(match_percentage)
  
-    candidate.score = match_percentage
-    candidate.match_score = match_percentage
+    setattr(candidate, "score", match_percentage)
+    setattr(candidate, "match_score", match_percentage)
     db.commit()
     db.refresh(candidate)
+
 
     return {
         "candidate_name": candidate.name,

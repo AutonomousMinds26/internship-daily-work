@@ -25,6 +25,7 @@ class AgentState(TypedDict):
     job_data: Optional[Dict[str, Any]]
     validation_results: Optional[Dict[str, Any]]
     score_details: Optional[Dict[str, Any]]
+    ats_details: Optional[Dict[str, Any]]
     recommendation_details: Optional[Dict[str, Any]]
     ranking_details: Optional[List[Dict[str, Any]]]
     errors: List[str]
@@ -32,6 +33,7 @@ class AgentState(TypedDict):
     candidate_id: Optional[int]
     job_id: Optional[int]
     db: Optional[Any]
+
 
 # --- Workflow Helper Functions ---
 
@@ -198,7 +200,29 @@ def candidate_scoring_node(state: AgentState) -> Dict[str, Any]:
         logger.error(f"Error in candidate scoring node: {str(e)}")
         return {"errors": state.get("errors", []) + [f"Scoring failed: {str(e)}"]}
 
+def ats_analysis_node(state: AgentState) -> Dict[str, Any]:
+    """Analyzes resume-JD relevance, required skill coverage, experience match, education match, etc."""
+    logger.info("LangGraph Node: ATS Analysis started.")
+    cand = state.get("candidate_data")
+    job = state.get("job_data")
+    
+    if not cand or not job:
+        return {"errors": state.get("errors", []) + ["ATS Analysis skipped: Missing candidate or job data."]}
+    
+    try:
+        from AI.ats_analyzer import analyze_ats
+        cand_dict = dict(cand) if cand else {}
+        if "resume_text" not in cand_dict:
+            cand_dict["resume_text"] = state.get("resume_text", "")
+            
+        ats_res = analyze_ats(cand_dict, job)
+        return {"ats_details": ats_res}
+    except Exception as e:
+        logger.error(f"Error in ATS analysis node: {str(e)}")
+        return {"errors": state.get("errors", []) + [f"ATS Analysis failed: {str(e)}"]}
+
 def recommendation_generation_node(state: AgentState) -> Dict[str, Any]:
+
     """Generates upskilling paths, custom questions, summaries, and explainable justifications."""
     logger.info("LangGraph Node: Recommendation Generation started.")
     cand = state.get("candidate_data")
@@ -290,7 +314,37 @@ def store_results_node(state: AgentState) -> Dict[str, Any]:
             # Update score and summary fields in Candidate DB
             candidate_db_any.ai_summary = rec_details.get("ai_summary", "")
             
+            # Save all score metrics directly on Candidate
+            ats_details = state.get("ats_details") or {}
+            ats_score = float(ats_details.get("ats_score", 0.0))
+            match_score = float(score_details.get("match_percentage", 0.0))
+            
+            scr_val = state.get("screening_score")
+            scr_details = state.get("screening_details")
+            scr_details_score = 0.0
+            if isinstance(scr_details, dict):
+                scr_details_score = scr_details.get("score", 0.0)
+            
+            screening_score_val = scr_val or scr_details_score or 70.0
+            try:
+                screening_score = float(str(screening_score_val))
+            except Exception:
+                screening_score = 70.0
+
+            if screening_score <= 10.0:
+                screening_score = screening_score * 10
+
+                
+            final_score = round((0.3 * ats_score) + (0.5 * match_score) + (0.2 * screening_score), 2)
+            
+            candidate_db_any.ats_score = ats_score
+            candidate_db_any.match_score = match_score
+            candidate_db_any.screening_score = screening_score
+            candidate_db_any.final_score = final_score
+            candidate_db_any.ats_details = ats_details
+            
             # Find score record
+
             job_db = db.query(Job).filter(Job.title == job.get("job_title")).first()
             if job_db:
                 score_rec = db.query(CandidateScore).filter(
@@ -342,6 +396,7 @@ try:
     workflow.add_node("job_extraction", job_extraction_node)
     workflow.add_node("validation", validation_node)
     workflow.add_node("candidate_scoring", candidate_scoring_node)
+    workflow.add_node("ats_analysis", ats_analysis_node)
     workflow.add_node("recommendation_generation", recommendation_generation_node)
     workflow.add_node("candidate_ranking", candidate_ranking_node)
     workflow.add_node("store_results", store_results_node)
@@ -368,7 +423,8 @@ try:
         }
     )
     
-    workflow.add_edge("candidate_scoring", "recommendation_generation")
+    workflow.add_edge("candidate_scoring", "ats_analysis")
+    workflow.add_edge("ats_analysis", "recommendation_generation")
     workflow.add_edge("recommendation_generation", "candidate_ranking")
     workflow.add_edge("candidate_ranking", "store_results")
     workflow.add_edge("store_results", END)
@@ -392,6 +448,7 @@ except ImportError:
                 "job_data": None,
                 "validation_results": None,
                 "score_details": None,
+                "ats_details": None,
                 "recommendation_details": None,
                 "ranking_details": None,
                 "errors": [],
@@ -422,6 +479,10 @@ except ImportError:
             
             # 5. Score Candidate
             res = candidate_scoring_node(state)
+            state.update(cast(AgentState, res))
+            
+            # 5b. ATS Analysis
+            res = ats_analysis_node(state)
             state.update(cast(AgentState, res))
             
             # 6. Generate Recommendations

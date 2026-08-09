@@ -58,6 +58,22 @@ def run_db_migrations():
         if not column_exists("candidates", "resume_hash"):
             cursor.execute("ALTER TABLE candidates ADD COLUMN resume_hash VARCHAR")
             logger.info("Migration: Added column 'resume_hash' to 'candidates'")
+        if not column_exists("candidates", "ats_score"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN ats_score FLOAT DEFAULT 0.0")
+            logger.info("Migration: Added column 'ats_score' to 'candidates'")
+        if not column_exists("candidates", "match_score"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN match_score FLOAT DEFAULT 0.0")
+            logger.info("Migration: Added column 'match_score' to 'candidates'")
+        if not column_exists("candidates", "screening_score"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN screening_score FLOAT DEFAULT 0.0")
+            logger.info("Migration: Added column 'screening_score' to 'candidates'")
+        if not column_exists("candidates", "final_score"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN final_score FLOAT DEFAULT 0.0")
+            logger.info("Migration: Added column 'final_score' to 'candidates'")
+        if not column_exists("candidates", "ats_details"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN ats_details JSON")
+            logger.info("Migration: Added column 'ats_details' to 'candidates'")
+
             
         # 2. Resumes table
         if not column_exists("resumes", "embedding"):

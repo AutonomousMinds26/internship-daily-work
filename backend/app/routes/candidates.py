@@ -62,9 +62,14 @@ def serialize_candidate(c: Candidate) -> dict:
         "location": c.location,
         "resume_text": c.resume_text,
         "status": c.status,
-        "created_at": c.created_at.isoformat() if c.created_at is not None else datetime.now(timezone.utc).isoformat()
-
+        "created_at": c.created_at.isoformat() if c.created_at is not None else datetime.now(timezone.utc).isoformat(),
+        "ats_score": c.ats_score,
+        "match_score": c.match_score,
+        "screening_score": c.screening_score,
+        "final_score": c.final_score,
+        "ats_details": c.ats_details
     }
+
 
 # --- CANDIDATE CRUD APIs ---
 
@@ -513,6 +518,59 @@ async def upload_resume(
     if isinstance(projects_list, str):
         projects_list = [p.strip() for p in projects_list.split(",") if p.strip()]
 
+    # Calculate ATS, Screening, and Final Score
+    from AI.ats_analyzer import analyze_ats
+    
+    cand_dict_ats = {
+        "name": name,
+        "email": email,
+        "phone": candidate_info.get("phone"),
+        "skills": skills_list,
+        "experience": experience_years,
+        "education": candidate_info.get("education"),
+        "projects": projects_list,
+        "resume_text": text
+    }
+    ats_res = analyze_ats(cand_dict_ats, job_info)
+    ats_score = float(ats_res.get("ats_score", 0.0))
+    ats_details = ats_res
+
+    # Calculate Screening score
+    screening_score = 0.0
+    if experience_years >= job.experience_required:
+        screening_score += 40
+    elif job.experience_required - experience_years <= 1:
+        screening_score += 30
+    elif job.experience_required - experience_years <= 2:
+        screening_score += 20
+    else:
+        screening_score += 10
+        
+    job_skills_norm = {s.lower().strip() for s in job_info.get("required_skills", [])}
+    cand_skills_norm = {s.lower().strip() for s in skills_list}
+    matched_skills_count = len(job_skills_norm & cand_skills_norm)
+    if job_skills_norm:
+        skills_ratio = matched_skills_count / len(job_skills_norm)
+        screening_score += (skills_ratio * 40)
+    else:
+        screening_score += 40
+        
+    edu_lower = str(candidate_info.get("education", "")).lower()
+    if any(kw in edu_lower for kw in ["ph.d", "doctor", "master", "m.tech", "mca"]):
+        screening_score += 20
+    elif any(kw in edu_lower for kw in ["b.tech", "b.e", "bachelor", "bsc", "bca"]):
+        screening_score += 15
+    else:
+        screening_score += 10
+
+    try:
+        match_score = float(str(match_result.get("match_percentage", 0.0)))
+    except Exception:
+        match_score = 0.0
+
+    final_score = round((0.3 * ats_score) + (0.5 * match_score) + (0.2 * screening_score), 2)
+
+
     candidate_db = db.query(Candidate).filter(Candidate.email == email).first()
     
     candidate_db_data = {
@@ -528,8 +586,14 @@ async def upload_resume(
         "location": candidate_info.get("location"),
         "resume_text": text,
         "status": status_val,
-        "resume_hash": resume_hash
+        "resume_hash": resume_hash,
+        "ats_score": ats_score,
+        "match_score": match_score,
+        "screening_score": screening_score,
+        "final_score": final_score,
+        "ats_details": ats_details
     }
+
 
     if candidate_db:
         logger.info(f"Updating existing candidate: {email}")
@@ -600,8 +664,14 @@ async def upload_resume(
         "location": candidate_info.get("location"),
         "notice_period": candidate_info.get("notice_period"),
         "expected_ctc": candidate_info.get("expected_ctc"),
-        "status": status_val
+        "status": status_val,
+        "ats_score": candidate_db.ats_score,
+        "match_score": candidate_db.match_score,
+        "screening_score": candidate_db.screening_score,
+        "final_score": candidate_db.final_score,
+        "ats_details": candidate_db.ats_details
     }
+
 
 @router.get("/candidate", response_model=None)
 def get_candidate(

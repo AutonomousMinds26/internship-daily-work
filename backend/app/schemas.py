@@ -94,6 +94,12 @@ class CandidateResponse(BaseModel):
     created_at: datetime
     ai_summary: Optional[str] = None
     resume_hash: Optional[str] = None
+    ats_score: Optional[float] = 0.0
+    match_score: Optional[float] = 0.0
+    screening_score: Optional[float] = 0.0
+    final_score: Optional[float] = 0.0
+    ats_details: Optional[dict] = None
+
 
 class CandidateStatusUpdate(BaseModel):
     status: str
@@ -132,6 +138,12 @@ class UploadResumeResponse(BaseModel):
     status: Optional[str] = None
     ai_summary: Optional[str] = None
     resume_hash: Optional[str] = None
+    ats_score: Optional[float] = 0.0
+    match_score: Optional[float] = 0.0
+    screening_score: Optional[float] = 0.0
+    final_score: Optional[float] = 0.0
+    ats_details: Optional[dict] = None
+
 
 
 # --- Interview Schemas ---
@@ -346,5 +358,37 @@ class AssessmentEvaluateResponse(BaseModel):
     evaluation_summary: str
 
 
+# --- A2-2. Screening Questionnaire & Evaluation Schemas ---
 
+class ScreeningQuestionnaireRequest(BaseModel):
+    candidate_id: int
+    job_id: int
 
+class ScreeningQuestionnaireResponse(BaseModel):
+    technical_questions: List[str]
+    experience_questions: List[str]
+    availability_questions: List[str]
+    salary_questions: List[str]
+    location_questions: List[str]
+
+class ScreeningEvaluateRequest(BaseModel):
+    candidate_id: int
+    question: str
+    answer: str
+
+class ScreeningEvaluateResponse(BaseModel):
+    score: int
+    relevance: str
+    concerns: List[str]
+    explanation: str
+    final_score: float
+
+class FeedbackAnalysisRequest(BaseModel):
+    candidate_id: int
+    feedbacks: Optional[List[dict]] = None
+
+class FeedbackAnalysisResponse(BaseModel):
+    average_rating: float
+    positive_points: List[str]
+    concerns: List[str]
+    overall_feedback: str
