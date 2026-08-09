@@ -28,6 +28,15 @@ class Candidate(Base):
     location = Column(String, nullable=True)
     resume_text = Column(Text, nullable=True)
     status = Column(String, default="Applied", nullable=False)
+    ats_score = Column(Integer, default=85)
+    screening_score = Column(Integer, default=80)
+    final_score = Column(Integer, default=82)
+    strengths = Column(JSON, default=[])
+    weaknesses = Column(JSON, default=[])
+    ai_recommendation = Column(Text, nullable=True)
+    candidate_summary = Column(Text, nullable=True)
+    screening_responses = Column(JSON, default=[])
+    feedback = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Job(Base):

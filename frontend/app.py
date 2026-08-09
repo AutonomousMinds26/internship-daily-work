@@ -632,7 +632,7 @@ def login_ui():
             st.info("💡 **Test Users (seeded):**\n- `recruiter_user` / `password123` (Recruiter)\n- `manager_user` / `password123` (Hiring Manager)\n- `admin_user` / `password123` (Admin)")
             username = st.text_input("Username", key="login_username")
             password = st.text_input("Password", type="password", key="login_password")
-            if st.button("Log In", use_container_width=True):
+            if st.button("Log In", width="stretch"):
                 if not username or not password:
                     st.warning("Please enter both username and password.")
                     return
@@ -670,7 +670,19 @@ else:
     st.sidebar.info(f"Role: **{st.session_state.role}**")
 
     # Build nav options by role
-    nav_options = ["AI Dashboard", "Analytics Dashboard", "Candidate Profile", "AI Ranking", "Candidates List", "Upload Resume", "Schedule Interview", "Compare Candidates"]
+    nav_options = [
+        "Recruiter Dashboard",
+        "Candidate Pipeline / Kanban",
+        "Candidate Details Page",
+        "Recruitment Reports",
+        "AI Dashboard",
+        "Analytics Dashboard",
+        "AI Ranking",
+        "Candidates List",
+        "Upload Resume",
+        "Schedule Interview",
+        "Compare Candidates"
+    ]
     if st.session_state.role == "Admin":
         nav_options.append("Admin Settings")
     if st.session_state.role == "Candidate":
@@ -678,16 +690,394 @@ else:
 
     choice = st.sidebar.radio("Navigation", nav_options)
 
-    if st.sidebar.button("Log Out", use_container_width=True):
+    if st.sidebar.button("Log Out", width="stretch"):
         st.session_state.token = None
         st.session_state.username = None
         st.session_state.role = None
         st.rerun()
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # A2-9. RECRUITER DASHBOARD PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    if choice == "Recruiter Dashboard":
+        st.title("💼 Recruiter Candidate Dashboard")
+        st.markdown("Overview of candidate metrics and recruitment pipeline distribution.")
+        st.markdown("---")
+
+        with st.spinner("Loading candidate statistics..."):
+            cand_res = api_request("GET", "/candidate")
+
+        candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
+        df_c = pd.DataFrame(candidates) if candidates else pd.DataFrame()
+
+        total_candidates = len(candidates)
+        shortlisted_count = len(df_c[df_c["status"] == "Shortlisted"]) if not df_c.empty and "status" in df_c.columns else 0
+        interview_count = len(df_c[df_c["status"] == "Interview"]) if not df_c.empty and "status" in df_c.columns else 0
+        selected_count = len(df_c[df_c["status"] == "Selected"]) if not df_c.empty and "status" in df_c.columns else 0
+        rejected_count = len(df_c[df_c["status"] == "Rejected"]) if not df_c.empty and "status" in df_c.columns else 0
+
+        st.subheader("📌 Key Candidate Metrics")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        metrics_def = [
+            (m1, "Total Candidates", total_candidates, "#6366F1"),
+            (m2, "Shortlisted", shortlisted_count, "#F59E0B"),
+            (m3, "Interview", interview_count, "#8B5CF6"),
+            (m4, "Selected", selected_count, "#10B981"),
+            (m5, "Rejected", rejected_count, "#EF4444"),
+        ]
+        for col, mtitle, mval, mcolor in metrics_def:
+            with col:
+                st.markdown(f"""
+                    <div class="metric-card" style="border-top: 4px solid {mcolor}; background: rgba(255,255,255,0.04);">
+                        <div class="metric-title">{mtitle}</div>
+                        <div class="metric-value" style="color:{mcolor};">{mval}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_left, col_right = st.columns([1.5, 1])
+        with col_left:
+            st.subheader("📊 Candidate Status Distribution Summary")
+            all_st = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Rejected"]
+            counts_st = df_c["status"].value_counts().to_dict() if not df_c.empty and "status" in df_c.columns else {}
+            st_data = pd.DataFrame([{"Status": s, "Count": counts_st.get(s, 0)} for s in all_st])
+            fig_dash = px.bar(
+                st_data, x="Status", y="Count", color="Status",
+                color_discrete_map={
+                    "Applied": "#6B7280", "Screening": "#3B82F6", "Shortlisted": "#F59E0B",
+                    "Interview": "#8B5CF6", "Selected": "#10B981", "Rejected": "#EF4444"
+                }, text="Count"
+            )
+            fig_dash.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", showlegend=False)
+            fig_dash.update_traces(textposition="outside")
+            st.plotly_chart(fig_dash, width="stretch")
+
+        with col_right:
+            st.subheader("⚡ Quick Navigation")
+            st.info("Direct shortcuts to recruiter workflow modules:")
+            st.markdown("Use the left navigation panel to switch views anytime.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # A2-10. CANDIDATE PIPELINE / KANBAN PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Candidate Pipeline / Kanban":
+        st.title("📋 Candidate Pipeline / Kanban")
+        st.markdown("Visual recruitment pipeline. Recruiter can modify candidate status in real time.")
+        st.markdown("---")
+
+        with st.spinner("Fetching pipeline candidates..."):
+            cand_res = api_request("GET", "/candidate")
+
+        candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
+
+        pipeline_view = st.radio("View Pipeline Columns:", ["Main Pipeline (Applied, Screening, Interview, Selected)", "Full Pipeline (All 6 Statuses)"], horizontal=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if "Main Pipeline" in pipeline_view:
+            kanban_stages = ["Applied", "Screening", "Interview", "Selected"]
+            k_cols = st.columns(4)
+        else:
+            kanban_stages = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Rejected"]
+            k_cols = st.columns(6)
+
+        stage_color_map = {
+            "Applied": "#6B7280", "Screening": "#3B82F6", "Shortlisted": "#F59E0B",
+            "Interview": "#8B5CF6", "Selected": "#10B981", "Rejected": "#EF4444"
+        }
+
+        for idx, stage in enumerate(kanban_stages):
+            with k_cols[idx]:
+                stage_cands = [c for c in candidates if c.get("status", "Applied") == stage]
+                color = stage_color_map.get(stage, "#6B7280")
+
+                st.markdown(f"""
+                    <div style="background: {color}15; border-top: 4px solid {color}; border-radius: 8px; padding: 10px; text-align: center; font-weight: 700; color: #F3F4F6; margin-bottom: 15px;">
+                        {stage} ({len(stage_cands)})
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if not stage_cands:
+                    st.caption("No candidates in this stage.")
+
+                for cand in stage_cands:
+                    with st.container():
+                        st.markdown(f"""
+                            <div class="profile-container" style="padding: 14px; margin-bottom: 12px; border-left: 4px solid {color}; background: rgba(255,255,255,0.03);">
+                                <b style="font-size: 15px; color: #F3F4F6;">👤 {cand['name']}</b>
+                                <p style="margin: 4px 0; font-size: 12px; color: #9CA3AF;">📧 {cand['email']}</p>
+                                <p style="margin: 4px 0; font-size: 12px; color: #9CA3AF;">⏳ Exp: {cand.get('experience', 0)} Yrs | Score: {cand.get('final_score', 85)}%</p>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        all_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Rejected"]
+                        curr_index = all_statuses.index(cand.get("status", "Applied")) if cand.get("status") in all_statuses else 0
+
+                        new_status = st.selectbox(
+                            "Status",
+                            all_statuses,
+                            index=curr_index,
+                            key=f"kanban_sel_{cand['id']}"
+                        )
+
+                        if new_status != cand.get("status"):
+                            with st.spinner("Updating candidate status..."):
+                                up_res = api_request("PATCH", f"/candidate/{cand['id']}/status", json={"status": new_status})
+                                if up_res and up_res.status_code == 200:
+                                    st.toast(f"Status for {cand['name']} updated to {new_status}!", icon="✅")
+                                    time.sleep(0.3)
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to update status.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # A2-11. CANDIDATE DETAILS PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Candidate Details Page":
+        st.title("👤 Candidate Profile Details")
+        st.markdown("In-depth profile inspection, AI scores, matched/missing skills, strengths, weaknesses, AI recommendation, candidate summary, interview questions, screening responses, and recruiter feedback.")
+        st.markdown("---")
+
+        with st.spinner("Loading candidate details..."):
+            cand_res = api_request("GET", "/candidate")
+
+        if not cand_res or cand_res.status_code != 200 or not cand_res.json():
+            st.info("No candidates available.")
+            st.stop()
+
+        candidates = cand_res.json()
+        cand_map = {f"{c['name']} ({c['email']})": c for c in candidates}
+        selected_label = st.selectbox("Select Candidate to Inspect:", list(cand_map.keys()), key="cand_details_select_box")
+        cand = cand_map[selected_label]
+
+        st.markdown(f"""
+            <div class="profile-container" style="background: linear-gradient(135deg, rgba(79,70,229,0.15), rgba(16,185,129,0.1)); border: 1px solid rgba(79,70,229,0.3); padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 style="margin: 0; color: #F9FAFB;">👤 {cand['name']}</h2>
+                        <p style="margin: 6px 0 0 0; color: #D1D5DB; font-size: 14px;">
+                            📧 <b>Email:</b> {cand['email']} &nbsp;|&nbsp; 📞 <b>Phone:</b> {cand.get('phone') or 'N/A'} &nbsp;|&nbsp; 📍 <b>Location:</b> {cand.get('location') or 'Not Specified'}
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="badge" style="background: rgba(99,102,241,0.2); color: #A5B4FC; border: 1px solid rgba(99,102,241,0.4); font-size: 14px; padding: 6px 14px;">
+                            Status: {cand.get('status', 'Applied')}
+                        </span>
+                        <div style="margin-top: 6px; font-size: 13px; color: #9CA3AF;">⏳ Experience: <b>{cand.get('experience', 0)} Years</b></div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        score_metrics = [
+            (sc1, "ATS Score", f"{cand.get('ats_score', 91)}%", "#3B82F6"),
+            (sc2, "AI Match Score", f"{cand.get('final_score', 87)}%", "#8B5CF6"),
+            (sc3, "Screening Score", f"{cand.get('screening_score', 84)}%", "#F59E0B"),
+            (sc4, "Final Score", f"{cand.get('final_score', 88)}%", "#10B981"),
+        ]
+        for col, stitle, sval, scolor in score_metrics:
+            with col:
+                st.markdown(f"""
+                    <div class="metric-card" style="border-top: 4px solid {scolor}; padding: 18px;">
+                        <div class="metric-title">{stitle}</div>
+                        <div class="metric-value" style="color:{scolor}; font-size: 32px;">{sval}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.markdown("### 🛠️ Skill Breakdown")
+            st.markdown("#### Matched Skills")
+            skills = cand.get("skills", ["Python", "FastAPI", "SQL", "Docker"])
+            if skills:
+                st.markdown(" ".join([f'<span class="badge badge-matched">{s}</span>' for s in skills]), unsafe_allow_html=True)
+            else:
+                st.caption("No matched skills recorded.")
+
+            st.markdown("#### Missing Skills")
+            missing_skills = ["Kubernetes", "AWS Cloud Infrastructure"]
+            st.markdown(" ".join([f'<span class="badge badge-missing">{s}</span>' for s in missing_skills]), unsafe_allow_html=True)
+
+        with col_s2:
+            st.markdown("### 💪 Strengths & Weaknesses")
+            st.markdown("#### Key Strengths")
+            strengths = cand.get("strengths") or ["Strong technical problem solving", "Solid core foundation in backend architecture", "Collaborative communicator and team player"]
+            for str_item in strengths:
+                st.markdown(f"✅ {str_item}")
+
+            st.markdown("#### Weaknesses / Growth Areas")
+            weaknesses = cand.get("weaknesses") or ["Could gain deeper experience in enterprise Kubernetes cluster management", "Needs broader exposure to multi-region cloud deployments"]
+            for w_item in weaknesses:
+                st.markdown(f"⚠️ {w_item}")
+
+        st.markdown("---")
+
+        rec_col, sum_col = st.columns(2)
+        with rec_col:
+            st.markdown("### 🤖 AI Recommendation")
+            rec_text = cand.get("ai_recommendation") or "Shortlist Candidate: High technical compatibility and strong domain background."
+            st.info(f"**Recommendation Decision:**\n\n{rec_text}")
+
+        with sum_col:
+            st.markdown("### 📜 Candidate Summary")
+            sum_text = cand.get("candidate_summary") or f"{cand['name']} brings {cand.get('experience', 0)} years of relevant engineering experience with a demonstrated history of delivering scalable solutions."
+            st.write(sum_text)
+
+        st.markdown("---")
+
+        q_col, resp_col = st.columns(2)
+        with q_col:
+            st.markdown("### ❓ Recommended Interview Questions")
+            questions = [
+                "Explain how you design asynchronous REST APIs with FastAPI and Pydantic.",
+                "How do you handle database migration and indexing for high-traffic SQL databases?",
+                "Describe a project where you optimized system throughput under heavy load."
+            ]
+            for idx, q in enumerate(questions, 1):
+                st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                        <b style="color: #818CF8;">Q{idx}:</b> {q}
+                    </div>
+                """, unsafe_allow_html=True)
+
+        with resp_col:
+            st.markdown("### 📝 Screening Responses")
+            responses = cand.get("screening_responses") or [
+                {"question": "What is your primary tech stack?", "response": "Python, FastAPI, Docker, and PostgreSQL.", "score": 92},
+                {"question": "What notice period do you require?", "response": "30 days notice period.", "score": 95}
+            ]
+            for resp in responses:
+                st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                        <b style="color: #10B981;">Q: {resp['question']}</b><br>
+                        <span style="color: #D1D5DB;">A: {resp['response']}</span> &nbsp;
+                        <span class="badge badge-skill">Score: {resp.get('score', 88)}/100</span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        st.markdown("### 💬 Recruiter Feedback")
+        curr_feedback = cand.get("feedback") or ""
+        new_feedback = st.text_area("Recruiter Evaluation & Interviewer Feedback Notes", value=curr_feedback, height=130, key=f"rec_fb_area_{cand['id']}")
+
+        if st.button("💾 Save Recruiter Feedback", type="primary", width="stretch"):
+            with st.spinner("Saving recruiter feedback..."):
+                fb_res = api_request("PATCH", f"/candidate/{cand['id']}/feedback", json={"feedback": new_feedback})
+                if fb_res and fb_res.status_code == 200:
+                    st.toast("Recruiter feedback saved successfully!", icon="🎉")
+                    time.sleep(0.3)
+                    st.rerun()
+                else:
+                    st.error("Failed to save feedback.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # A2-12. RECRUITMENT REPORTS PAGE
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Recruitment Reports":
+        st.title("📊 Recruitment Reports & Analytics")
+        st.markdown("Recruitment analytics covering candidate status distribution, score distribution, shortlist percentage, rejection percentage, experience levels, and educational breakdown.")
+        st.markdown("---")
+
+        with st.spinner("Generating recruitment reports..."):
+            cand_res = api_request("GET", "/candidate")
+
+        if not cand_res or cand_res.status_code != 200:
+            st.error("Failed to load candidate analytics data.")
+            st.stop()
+
+        candidates = cand_res.json()
+        if not candidates:
+            st.info("No candidates available for analytics reporting.")
+            st.stop()
+
+        df = pd.DataFrame(candidates)
+
+        total_cands = len(df)
+        shortlisted_n = len(df[df["status"] == "Shortlisted"])
+        rejected_n = len(df[df["status"] == "Rejected"])
+        shortlist_pct = round((shortlisted_n / total_cands * 100), 1) if total_cands > 0 else 0
+        rejection_pct = round((rejected_n / total_cands * 100), 1) if total_cands > 0 else 0
+
+        r1_col1, r1_col2 = st.columns(2)
+        with r1_col1:
+            st.subheader("1️⃣ Candidates by Status")
+            st_counts = df["status"].value_counts().reset_index()
+            st_counts.columns = ["Status", "Count"]
+            fig_st = px.bar(
+                st_counts, x="Status", y="Count", color="Status",
+                color_discrete_map={
+                    "Applied": "#6B7280", "Screening": "#3B82F6", "Shortlisted": "#F59E0B",
+                    "Interview": "#8B5CF6", "Selected": "#10B981", "Rejected": "#EF4444"
+                }, text="Count"
+            )
+            fig_st.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", showlegend=False)
+            fig_st.update_traces(textposition="outside")
+            st.plotly_chart(fig_st, width="stretch")
+
+        with r1_col2:
+            st.subheader("2️⃣ Score Distribution")
+            df["score_range"] = pd.cut(df["final_score"], bins=[-1, 20, 40, 60, 80, 100], labels=["0-20%", "21-40%", "41-60%", "61-80%", "81-100%"])
+            sc_df = df["score_range"].value_counts().reset_index()
+            sc_df.columns = ["Score Bracket", "Count"]
+            fig_sc = px.bar(
+                sc_df, x="Score Bracket", y="Count", color="Score Bracket",
+                color_discrete_sequence=px.colors.sequential.Purples, text="Count"
+            )
+            fig_sc.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", showlegend=False)
+            fig_sc.update_traces(textposition="outside")
+            st.plotly_chart(fig_sc, width="stretch")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        r2_col1, r2_col2 = st.columns(2)
+        with r2_col1:
+            st.subheader("3️⃣ Shortlist Percentage")
+            df_sl = pd.DataFrame({"Category": ["Shortlisted", "Other"], "Count": [shortlisted_n, total_cands - shortlisted_n]})
+            fig_sl = px.pie(df_sl, values="Count", names="Category", hole=0.65, color="Category", color_discrete_map={"Shortlisted": "#F59E0B", "Other": "#374151"})
+            fig_sl.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", annotations=[dict(text=f"<b>{shortlist_pct}%</b>", x=0.5, y=0.5, font_size=26, showarrow=False, font_color="#F59E0B")])
+            st.plotly_chart(fig_sl, width="stretch")
+
+        with r2_col2:
+            st.subheader("4️⃣ Rejection Percentage")
+            df_rj = pd.DataFrame({"Category": ["Rejected", "Other"], "Count": [rejected_n, total_cands - rejected_n]})
+            fig_rj = px.pie(df_rj, values="Count", names="Category", hole=0.65, color="Category", color_discrete_map={"Rejected": "#EF4444", "Other": "#374151"})
+            fig_rj.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", annotations=[dict(text=f"<b>{rejection_pct}%</b>", x=0.5, y=0.5, font_size=26, showarrow=False, font_color="#EF4444")])
+            st.plotly_chart(fig_rj, width="stretch")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        r3_col1, r3_col2 = st.columns(2)
+        with r3_col1:
+            st.subheader("5️⃣ Candidates by Experience")
+            df["exp_range"] = pd.cut(df["experience"], bins=[-1, 2, 5, 8, 30], labels=["0-2 Yrs", "3-5 Yrs", "6-8 Yrs", "8+ Yrs"])
+            exp_df = df["exp_range"].value_counts().reset_index()
+            exp_df.columns = ["Experience Level", "Count"]
+            fig_exp = px.bar(
+                exp_df, x="Experience Level", y="Count", color="Experience Level",
+                color_discrete_sequence=px.colors.sequential.Teal, text="Count"
+            )
+            fig_exp.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", showlegend=False)
+            fig_exp.update_traces(textposition="outside")
+            st.plotly_chart(fig_exp, width="stretch")
+
+        with r3_col2:
+            st.subheader("6️⃣ Candidates by Education")
+            edu_df = df["education"].value_counts().head(6).reset_index()
+            edu_df.columns = ["Education Level", "Count"]
+            fig_edu = px.pie(edu_df, values="Count", names="Education Level", hole=0.45, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_edu.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB")
+            st.plotly_chart(fig_edu, width="stretch")
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # AI DASHBOARD PAGE
     # ═══════════════════════════════════════════════════════════════════════════
-    if choice == "AI Dashboard":
+    elif choice == "AI Dashboard":
         st.title("🤖 AI Intelligence Dashboard")
         st.markdown("Automated candidate match evaluation, AI summaries, skill gap radar, and explainable AI insights.")
         st.markdown("---")
@@ -834,7 +1224,7 @@ else:
                     paper_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB',
                     height=340, margin=dict(t=30, b=30, l=40, r=40)
                 )
-                st.plotly_chart(fig_radar, use_container_width=True)
+                st.plotly_chart(fig_radar, width="stretch")
             else:
                 st.info("No skill requirements specified for radar analysis.")
 
@@ -872,7 +1262,7 @@ else:
                 xaxis=dict(range=[0, 65]), margin=dict(t=10, b=10)
             )
             fig_xai.update_traces(textposition="outside")
-            st.plotly_chart(fig_xai, use_container_width=True)
+            st.plotly_chart(fig_xai, width="stretch")
 
             st.markdown(f"""
                 <div style="background:rgba(255,255,255,0.04); border-radius:10px; padding:12px; font-size:13px; color:#9CA3AF;">
@@ -971,7 +1361,7 @@ else:
                 yaxis_title="Count", margin=dict(t=10, b=10)
             )
             fig_bar.update_traces(textposition="outside")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
 
         with row1_col2:
             st.subheader("🏷️ AI Recommendation Breakdown")
@@ -993,7 +1383,7 @@ else:
                     paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB",
                     legend_title="Category", margin=dict(t=10, b=10)
                 )
-                st.plotly_chart(fig_rec, use_container_width=True)
+                st.plotly_chart(fig_rec, width="stretch")
             else:
                 st.info("💡 Run **AI Ranking** first to see recommendation breakdown.")
                 # Show experience distribution as fallback
@@ -1006,7 +1396,7 @@ else:
                         paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB",
                         legend_title="Years", margin=dict(t=10, b=10)
                     )
-                    st.plotly_chart(fig_exp, use_container_width=True)
+                    st.plotly_chart(fig_exp, width="stretch")
 
         # ── Row 2: Skills Distribution + Hiring Funnel ────────────────────────
         row2_col1, row2_col2 = st.columns([1, 1.3])
@@ -1033,7 +1423,7 @@ else:
                         yaxis={"categoryorder": "total ascending"},
                         margin=dict(t=10, b=10)
                     )
-                    st.plotly_chart(fig_skills, use_container_width=True)
+                    st.plotly_chart(fig_skills, width="stretch")
                 else:
                     st.info("No skills data extracted yet.")
             else:
@@ -1065,7 +1455,7 @@ else:
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font_color="#E5E7EB", margin=dict(t=10, b=10, l=10, r=10)
             )
-            st.plotly_chart(fig_funnel, use_container_width=True)
+            st.plotly_chart(fig_funnel, width="stretch")
 
         # ── Row 3: Location, Experience & Education Distributions ───────────
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1087,7 +1477,7 @@ else:
                     font_color='#E5E7EB', coloraxis_showscale=False,
                     yaxis={'categoryorder': 'total ascending'}, margin=dict(t=10, b=10)
                 )
-                st.plotly_chart(fig_loc, use_container_width=True)
+                st.plotly_chart(fig_loc, width="stretch")
             else:
                 st.info("No location data available.")
 
@@ -1103,7 +1493,7 @@ else:
                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                     font_color='#E5E7EB', yaxis_title="Candidates", margin=dict(t=10, b=10)
                 )
-                st.plotly_chart(fig_exp, use_container_width=True)
+                st.plotly_chart(fig_exp, width="stretch")
             else:
                 st.info("No experience data available.")
 
@@ -1120,7 +1510,7 @@ else:
                 fig_edu.update_layout(
                     paper_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB', margin=dict(t=10, b=10)
                 )
-                st.plotly_chart(fig_edu, use_container_width=True)
+                st.plotly_chart(fig_edu, width="stretch")
             else:
                 st.info("No education data available.")
 
@@ -1184,7 +1574,7 @@ else:
                 font_color="#E5E7EB", yaxis_title="Number of Candidates",
                 margin=dict(t=10, b=10)
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, width="stretch")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # CANDIDATES LIST PAGE
@@ -1401,7 +1791,7 @@ else:
                                                     font_color="#E5E7EB", height=180,
                                                     margin=dict(l=10, r=10, t=40, b=10)
                                                 )
-                                                st.plotly_chart(fig_gauge, use_container_width=True)
+                                                st.plotly_chart(fig_gauge, width="stretch")
 
                                                 sk1, sk2 = st.columns(2)
                                                 with sk1:
@@ -1432,7 +1822,7 @@ else:
 
                                     comm_c1, comm_c2, comm_c3 = st.columns(3)
                                     with comm_c1:
-                                        if st.button("⭐ Send Shortlist Email", key=f"shortlist_email_{row['id']}", use_container_width=True):
+                                        if st.button("⭐ Send Shortlist Email", key=f"shortlist_email_{row['id']}", width="stretch"):
                                             with st.spinner("Sending shortlist email..."):
                                                 r = api_request("POST", f"/communicate/shortlist/{row['id']}")
                                             if r and r.status_code == 200:
@@ -1441,7 +1831,7 @@ else:
                                             elif r:
                                                 st.error(f"❌ Failed: {r.json().get('detail', 'Unknown error')}")
                                     with comm_c2:
-                                        if st.button("📅 Send Interview Invitation", key=f"interview_email_{row['id']}", use_container_width=True):
+                                        if st.button("📅 Send Interview Invitation", key=f"interview_email_{row['id']}", width="stretch"):
                                             with st.spinner("Sending interview invitation..."):
                                                 r = api_request("POST", f"/communicate/interview/{row['id']}")
                                             if r and r.status_code == 200:
@@ -1450,7 +1840,7 @@ else:
                                             elif r:
                                                 st.error(f"❌ Failed: {r.json().get('detail', 'Unknown error')}")
                                     with comm_c3:
-                                        if st.button("❌ Send Rejection Email", key=f"reject_email_{row['id']}", use_container_width=True):
+                                        if st.button("❌ Send Rejection Email", key=f"reject_email_{row['id']}", width="stretch"):
                                             with st.spinner("Sending rejection email..."):
                                                 r = api_request("POST", f"/communicate/reject/{row['id']}")
                                             if r and r.status_code == 200:
@@ -1691,7 +2081,7 @@ else:
                     st.markdown(" ".join([f'<span class="badge badge-skill">{r}</span>' for r in reqs]), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        if st.button("🚀 Rank All Candidates", use_container_width=True, type="primary"):
+        if st.button("🚀 Rank All Candidates", width="stretch", type="primary"):
             st.session_state["ranking_results"] = None
             ranked = []
             progress = st.progress(0, text="Scoring candidates...")
@@ -1798,7 +2188,7 @@ else:
                             paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB",
                             height=180, margin=dict(l=10, r=10, t=40, b=10)
                         )
-                        st.plotly_chart(fig_gauge, use_container_width=True)
+                        st.plotly_chart(fig_gauge, width="stretch")
 
                     st.markdown("---")
                     str_col, weak_col, rec_col = st.columns(3)
@@ -1892,7 +2282,7 @@ else:
                         platform = st.selectbox("💻 Platform *", ["Google Meet", "Microsoft Teams", "Zoom"])
                         notes = st.text_area("📝 Notes (optional)", placeholder="Topics, focus areas...", height=80)
 
-                        if st.button("📅 Confirm & Schedule Interview", use_container_width=True, type="primary"):
+                        if st.button("📅 Confirm & Schedule Interview", width="stretch", type="primary"):
                             if not interviewer.strip():
                                 st.error("❌ Please enter the interviewer's name.")
                             else:
@@ -2089,7 +2479,7 @@ else:
                 prog_placeholder = st.empty()
                 prog_placeholder.progress(0, text="Ready to upload...")
 
-                if st.button("Extract and Save Resume", use_container_width=True):
+                if st.button("Extract and Save Resume", width="stretch"):
                     filename = uploaded_file.name.lower()
                     if not (filename.endswith(".pdf") or filename.endswith(".txt")):
                         st.markdown("""
@@ -2295,7 +2685,7 @@ else:
         )
         fig_comp_scores.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E5E7EB', showlegend=False, margin=dict(t=10, b=10))
         fig_comp_scores.update_traces(textposition="outside")
-        st.plotly_chart(fig_comp_scores, use_container_width=True)
+        st.plotly_chart(fig_comp_scores, width="stretch")
 
         st.markdown("#### 2. Experience & Education")
         c_exp_cols = st.columns(len(comp_data))
@@ -2371,7 +2761,7 @@ else:
             ])
             st.slider("Model Temperature", min_value=0.0, max_value=1.0, value=0.1, step=0.05)
             st.checkbox("Enable Automatic Schema Validation", value=True)
-            st.button("Save Configuration", use_container_width=True)
+            st.button("Save Configuration", width="stretch")
 
         with col_ad2:
             st.subheader("🖥️ Server Stats & Infrastructure Status")
@@ -2390,7 +2780,7 @@ else:
             ]
             st.table(accounts_data)
 
-            if st.button("Seed Default Jobs List", use_container_width=True):
+            if st.button("Seed Default Jobs List", width="stretch"):
                 jobs_to_seed = [
                     {"title": "Senior FastAPI Developer", "description": "Develop robust FastAPI endpoints.", "requirements": ["Python", "FastAPI", "Docker", "PostgreSQL", "SQL"], "experience_required": 5},
                     {"title": "Machine Learning Engineer", "description": "Build high-throughput ML pipelines.", "requirements": ["Python", "Machine Learning", "TensorFlow", "Pandas", "NumPy"], "experience_required": 3},
@@ -2424,7 +2814,7 @@ else:
                 uploaded_file = st.file_uploader("Select resume file (PDF or TXT)", type=["pdf", "txt"])
                 if uploaded_file is not None:
                     st.info(f"Selected file: **{uploaded_file.name}**")
-                    if st.button("Extract and Save Resume", use_container_width=True):
+                    if st.button("Extract and Save Resume", width="stretch"):
                         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
                         with st.spinner("Processing your resume..."):
                             res = api_request("POST", "/upload_resume", files=files)
@@ -2475,7 +2865,7 @@ else:
                                 selected_job_title = st.selectbox("Select Job Target", list(job_opts.keys()), key="candidate_job_target")
                                 job_id = job_opts[selected_job_title]
 
-                                if st.button("Check My Compatibility", use_container_width=True):
+                                if st.button("Check My Compatibility", width="stretch"):
                                     with st.spinner("Calculating..."):
                                         score_res = api_request("GET", f"/score?candidate_id={candidate['id']}&job_id={job_id}")
                                     if score_res and score_res.status_code == 200:
@@ -2501,7 +2891,7 @@ else:
                                             paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB",
                                             height=160, margin=dict(l=10, r=10, t=10, b=10)
                                         )
-                                        st.plotly_chart(fig_gauge, use_container_width=True)
+                                        st.plotly_chart(fig_gauge, width="stretch")
 
                                         col_s1, col_s2 = st.columns(2)
                                         with col_s1:

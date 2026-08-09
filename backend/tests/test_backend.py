@@ -283,3 +283,40 @@ def test_patch_candidate_status(client, mock_redis):
     assert get_res.status_code == 200
     assert get_res.json()["status"] == "Shortlisted"
 
+def test_patch_candidate_rejected_and_feedback(client):
+    recruiter_token = get_token(client, "recruiter_user")
+
+    # 1. Upload candidate
+    resume_content = (
+        "Sam Wilson\n"
+        "Email: sam.wilson@example.com\n"
+        "Skills: Python, React\n"
+        "Experience: 4 years\n"
+    )
+    upload_res = client.post(
+        "/upload_resume",
+        files={"file": ("resume.txt", resume_content.encode("utf-8"))},
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert upload_res.status_code == 201
+    cand_id = upload_res.json()["id"]
+
+    # 2. Update status to Rejected
+    rej_res = client.patch(
+        f"/candidate/{cand_id}/status",
+        json={"status": "Rejected"},
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert rej_res.status_code == 200
+    assert rej_res.json()["status"] == "Rejected"
+
+    # 3. Update feedback
+    fb_res = client.patch(
+        f"/candidate/{cand_id}/feedback",
+        json={"feedback": "Candidate performed well on technical interview but declined offer."},
+        headers={"Authorization": f"Bearer {recruiter_token}"}
+    )
+    assert fb_res.status_code == 200
+    assert fb_res.json()["feedback"] == "Candidate performed well on technical interview but declined offer."
+
+

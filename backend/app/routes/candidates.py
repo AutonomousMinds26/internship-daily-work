@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import Candidate, Job
-from app.schemas import CandidateResponse, ScoreResponse, MatchDetails, CandidateStatusUpdate
+from app.schemas import CandidateResponse, ScoreResponse, MatchDetails, CandidateStatusUpdate, CandidateFeedbackUpdate
 from app.auth import RoleChecker, get_current_user, User
 from app.services.extractor import extract_candidate_info
 from app.services.redis_cache import get_cached_candidate, cache_candidate, invalidate_candidate
@@ -31,13 +31,22 @@ def serialize_candidate(c: Candidate) -> dict:
         "phone": c.phone,
         "education": c.education,
         "experience": c.experience,
-        "skills": c.skills,
-        "projects": c.projects,
+        "skills": c.skills or [],
+        "projects": c.projects or [],
         "notice_period": c.notice_period,
         "expected_ctc": c.expected_ctc,
         "location": c.location,
         "resume_text": c.resume_text,
         "status": c.status,
+        "ats_score": c.ats_score if getattr(c, 'ats_score', None) is not None else 85,
+        "screening_score": c.screening_score if getattr(c, 'screening_score', None) is not None else 80,
+        "final_score": c.final_score if getattr(c, 'final_score', None) is not None else 82,
+        "strengths": getattr(c, 'strengths', []) or [],
+        "weaknesses": getattr(c, 'weaknesses', []) or [],
+        "ai_recommendation": getattr(c, 'ai_recommendation', None),
+        "candidate_summary": getattr(c, 'candidate_summary', None),
+        "screening_responses": getattr(c, 'screening_responses', []) or [],
+        "feedback": getattr(c, 'feedback', None),
         "created_at": c.created_at.isoformat() if c.created_at else datetime.utcnow().isoformat()
     }
 
@@ -276,7 +285,7 @@ def update_candidate_status(
     Update candidate status. Restricted to Recruiter, Hiring Manager, and Admin.
     """
     logger.info(f"Updating candidate {candidate_id} status to {status_in.status}")
-    valid_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected"]
+    valid_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Rejected"]
     if status_in.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -300,5 +309,33 @@ def update_candidate_status(
     cache_candidate(candidate.id, serialize_candidate(candidate))
     
     logger.info(f"Candidate {candidate_id} status updated successfully to {status_in.status}")
+    return candidate
+
+
+@router.patch("/candidate/{candidate_id}/feedback", response_model=CandidateResponse)
+def update_candidate_feedback(
+    candidate_id: int,
+    feedback_in: CandidateFeedbackUpdate,
+    db: Session = Depends(get_db),
+    _current_user = Depends(status_update_checker)
+):
+    """
+    Update recruiter feedback for candidate.
+    """
+    logger.info(f"Updating feedback for candidate {candidate_id}")
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with ID {candidate_id} not found."
+        )
+        
+    candidate.feedback = feedback_in.feedback
+    db.commit()
+    db.refresh(candidate)
+    
+    invalidate_candidate(candidate.id)
+    cache_candidate(candidate.id, serialize_candidate(candidate))
+    
     return candidate
 

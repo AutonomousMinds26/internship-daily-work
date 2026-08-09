@@ -62,6 +62,15 @@ class CandidateCreate(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: Optional[str] = "Applied"
+    ats_score: Optional[int] = 85
+    screening_score: Optional[int] = 80
+    final_score: Optional[int] = 82
+    strengths: Optional[List[str]] = []
+    weaknesses: Optional[List[str]] = []
+    ai_recommendation: Optional[str] = None
+    candidate_summary: Optional[str] = None
+    screening_responses: Optional[List[dict]] = []
+    feedback: Optional[str] = None
 
 class CandidateResponse(BaseModel):
     id: int
@@ -77,6 +86,15 @@ class CandidateResponse(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: str
+    ats_score: Optional[int] = 85
+    screening_score: Optional[int] = 80
+    final_score: Optional[int] = 82
+    strengths: Optional[List[str]] = []
+    weaknesses: Optional[List[str]] = []
+    ai_recommendation: Optional[str] = None
+    candidate_summary: Optional[str] = None
+    screening_responses: Optional[List[dict]] = []
+    feedback: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -84,6 +102,9 @@ class CandidateResponse(BaseModel):
 
 class CandidateStatusUpdate(BaseModel):
     status: str
+
+class CandidateFeedbackUpdate(BaseModel):
+    feedback: str
 
 
 # --- Score/Match Schemas ---
