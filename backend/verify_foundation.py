@@ -1,7 +1,7 @@
 import os
 from fastapi.testclient import TestClient
-from database import SessionLocal, Base, engine
-import models
+from database.database import SessionLocal, Base, engine
+import database.models as models
 from typing import cast, Any
 
 # Force create database tables on clean verify db
