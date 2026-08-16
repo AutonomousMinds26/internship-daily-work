@@ -8,6 +8,7 @@ import re
 import time
 import calendar as cal_module
 from datetime import date, datetime, timedelta
+from collections import Counter
 
 # Page Configuration
 st.set_page_config(
@@ -28,71 +29,74 @@ st.markdown("""
         
         /* Metric Card styling */
         .metric-card {
-            background: rgba(255, 255, 255, 0.08);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             border-radius: 16px;
             padding: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+            border: 1px solid #334155;
+            box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.15);
             transition: all 0.3s ease;
             text-align: center;
+            color: #F8FAFC;
         }
         
         .metric-card:hover {
-            transform: translateY(-5px);
-            border-color: rgba(79, 70, 229, 0.4);
-            box-shadow: 0 12px 40px 0 rgba(79, 70, 229, 0.2);
+            transform: translateY(-4px);
+            border-color: #6366F1;
+            box-shadow: 0 12px 32px 0 rgba(99, 102, 241, 0.25);
         }
         
         .metric-title {
-            font-size: 14px;
-            color: #8A8F98;
+            font-size: 13px;
+            color: #94A3B8;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.2px;
+            font-weight: 700;
             margin-bottom: 8px;
         }
         
         .metric-value {
             font-size: 36px;
-            font-weight: 700;
-            color: #4F46E5;
+            font-weight: 800;
+            color: #818CF8;
         }
         
         /* Profile cards */
         .profile-container {
-            background: rgba(255, 255, 255, 0.03);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             border-radius: 12px;
             padding: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid #334155;
             margin-bottom: 15px;
+            color: #F8FAFC;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
         }
         
         /* Badge styling */
         .badge {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 4px 12px;
             border-radius: 50px;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             margin: 2px;
         }
         
         .badge-skill {
-            background-color: rgba(79, 70, 229, 0.15);
-            color: #818CF8;
-            border: 1px solid rgba(79, 70, 229, 0.3);
+            background-color: #1E1B4B;
+            color: #A5B4FC;
+            border: 1px solid #4338CA;
         }
         
         .badge-matched {
-            background-color: rgba(16, 185, 129, 0.15);
-            color: #34D399;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background-color: #064E3B;
+            color: #6EE7B7;
+            border: 1px solid #059669;
         }
         
         .badge-missing {
-            background-color: rgba(239, 68, 68, 0.15);
-            color: #F87171;
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background-color: #7F1D1D;
+            color: #FCA5A5;
+            border: 1px solid #DC2626;
         }
 
         /* Error alerts overrides */
@@ -107,28 +111,29 @@ st.markdown("""
             display: flex;
             align-items: center;
             gap: 16px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.07);
+            background: #1E293B;
+            border: 1px solid #334155;
             border-radius: 12px;
             padding: 14px 20px;
             margin-bottom: 10px;
             transition: all 0.25s ease;
+            color: #F8FAFC;
         }
         .rank-row:hover {
-            background: rgba(79, 70, 229, 0.08);
-            border-color: rgba(79, 70, 229, 0.3);
+            background: #2D3748;
+            border-color: #6366F1;
             transform: translateX(4px);
         }
         .rank-number {
             font-size: 22px;
             font-weight: 700;
-            color: #6366F1;
+            color: #818CF8;
             min-width: 32px;
         }
         .rank-name {
             font-size: 16px;
             font-weight: 600;
-            color: #E5E7EB;
+            color: #F8FAFC;
             flex: 1;
         }
         .rank-score {
@@ -136,45 +141,47 @@ st.markdown("""
             font-weight: 700;
         }
         .badge-shortlisted {
-            background-color: rgba(16, 185, 129, 0.2);
-            color: #34D399;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            background-color: #064E3B;
+            color: #6EE7B7;
+            border: 1px solid #059669;
             padding: 4px 14px;
             border-radius: 50px;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
         }
         .badge-maybe {
-            background-color: rgba(245, 158, 11, 0.2);
-            color: #FCD34D;
-            border: 1px solid rgba(245, 158, 11, 0.4);
+            background-color: #78350F;
+            color: #FDE68A;
+            border: 1px solid #D97706;
             padding: 4px 14px;
             border-radius: 50px;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
         }
         .badge-reject {
-            background-color: rgba(239, 68, 68, 0.2);
-            color: #F87171;
-            border: 1px solid rgba(239, 68, 68, 0.4);
+            background-color: #7F1D1D;
+            color: #FCA5A5;
+            border: 1px solid #DC2626;
             padding: 4px 14px;
             border-radius: 50px;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
         }
         .detail-panel {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.09);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+            border: 1px solid #334155;
             border-radius: 14px;
             padding: 24px;
             margin-top: 8px;
+            color: #F8FAFC;
         }
         .job-selector-box {
-            background: rgba(79, 70, 229, 0.08);
-            border: 1px solid rgba(79, 70, 229, 0.25);
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            border: 1px solid #4338CA;
             border-radius: 14px;
             padding: 20px 24px;
             margin-bottom: 24px;
+            color: #F8FAFC;
         }
 
         /* Journey Timeline */
@@ -201,14 +208,14 @@ st.markdown("""
             left: 50%;
             width: 100%;
             height: 2px;
-            background: rgba(255,255,255,0.1);
+            background: #334155;
             z-index: 0;
         }
         .timeline-step.completed::after {
             background: linear-gradient(90deg, #10B981, #10B981);
         }
         .timeline-step.active::after {
-            background: linear-gradient(90deg, #3B82F6, rgba(255,255,255,0.1));
+            background: linear-gradient(90deg, #3B82F6, #334155);
         }
         .timeline-dot {
             width: 36px;
@@ -223,20 +230,20 @@ st.markdown("""
             transition: all 0.3s ease;
         }
         .timeline-dot.completed {
-            background: rgba(16, 185, 129, 0.2);
+            background: #064E3B;
             border-color: #10B981;
-            color: #10B981;
+            color: #6EE7B7;
         }
         .timeline-dot.active {
-            background: rgba(59, 130, 246, 0.25);
+            background: #1E3A8A;
             border-color: #3B82F6;
-            color: #3B82F6;
+            color: #93C5FD;
             box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
         }
         .timeline-dot.pending {
-            background: rgba(107, 114, 128, 0.1);
-            border-color: rgba(107, 114, 128, 0.3);
-            color: #6B7280;
+            background: #1E293B;
+            border-color: #475569;
+            color: #94A3B8;
         }
         .timeline-label {
             font-size: 11px;
@@ -244,9 +251,9 @@ st.markdown("""
             margin-top: 6px;
             line-height: 1.3;
         }
-        .timeline-label.completed { color: #10B981; font-weight: 600; }
+        .timeline-label.completed { color: #10B981; font-weight: 700; }
         .timeline-label.active { color: #3B82F6; font-weight: 700; }
-        .timeline-label.pending { color: #6B7280; }
+        .timeline-label.pending { color: #64748B; font-weight: 600; }
 
         /* Communication Buttons */
         .comm-btn-row {
@@ -258,16 +265,16 @@ st.markdown("""
 
         /* Interview card */
         .interview-card {
-            background: rgba(79, 70, 229, 0.07);
-            border: 1px solid rgba(79, 70, 229, 0.2);
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            border: 1px solid #4338CA;
             border-radius: 12px;
             padding: 16px 20px;
             margin-bottom: 10px;
             transition: all 0.25s ease;
+            color: #F8FAFC;
         }
         .interview-card:hover {
-            border-color: rgba(79, 70, 229, 0.45);
-            background: rgba(79, 70, 229, 0.12);
+            border-color: #6366F1;
         }
 
         /* Platform pill */
@@ -277,87 +284,82 @@ st.markdown("""
             border-radius: 50px;
             font-size: 12px;
             font-weight: 600;
-            background: rgba(139, 92, 246, 0.15);
-            color: #A78BFA;
-            border: 1px solid rgba(139, 92, 246, 0.3);
+            background: #312E81;
+            color: #C7D2FE;
+            border: 1px solid #4338CA;
         }
 
         /* Pagination buttons */
         .pagination-info {
             text-align: center;
-            color: #8A8F98;
+            color: #64748B;
             font-size: 14px;
             margin: 8px 0;
         }
 
-        /* Funnel chart container */
-        .funnel-section {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 14px;
-            padding: 16px;
-        }
-
         /* AI Insight Card */
         .ai-insight-card {
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(139, 92, 246, 0.06));
-            border: 1px solid rgba(79, 70, 229, 0.2);
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            border: 1px solid #4338CA;
             border-radius: 14px;
             padding: 20px 24px;
             margin-bottom: 14px;
+            color: #F8FAFC;
             transition: all 0.3s ease;
         }
         .ai-insight-card:hover {
-            border-color: rgba(79, 70, 229, 0.4);
+            border-color: #6366F1;
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.15);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
         }
 
         /* Question Card */
         .question-card {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: #1E293B;
+            border: 1px solid #334155;
             border-radius: 10px;
             padding: 14px 18px;
             margin-bottom: 10px;
+            color: #F8FAFC;
             transition: all 0.25s ease;
         }
         .question-card:hover {
-            background: rgba(79, 70, 229, 0.06);
-            border-color: rgba(79, 70, 229, 0.25);
+            border-color: #6366F1;
         }
 
         /* Comparison Grid */
         .comparison-col {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.07);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+            border: 1px solid #334155;
             border-radius: 14px;
             padding: 20px;
             min-height: 200px;
+            color: #F8FAFC;
         }
         .comparison-col:hover {
-            border-color: rgba(79, 70, 229, 0.3);
+            border-color: #6366F1;
         }
         .comparison-winner {
-            border: 2px solid rgba(16, 185, 129, 0.5) !important;
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+            border: 2px solid #10B981 !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
         }
 
         /* Calendar cell */
         .cal-cell {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: #1E293B;
+            border: 1px solid #334155;
             border-radius: 8px;
             padding: 8px;
             min-height: 80px;
             font-size: 12px;
+            color: #F8FAFC;
         }
         .cal-cell-today {
-            border-color: rgba(79, 70, 229, 0.5);
-            background: rgba(79, 70, 229, 0.08);
+            border-color: #6366F1;
+            background: #1E1B4B;
         }
         .cal-event {
-            background: rgba(79, 70, 229, 0.15);
+            background: #312E81;
             border-left: 3px solid #6366F1;
             padding: 3px 6px;
             border-radius: 4px;
@@ -368,11 +370,12 @@ st.markdown("""
 
         /* Diversity metric */
         .diversity-metric {
-            background: linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(59, 130, 246, 0.06));
-            border: 1px solid rgba(6, 182, 212, 0.2);
+            background: linear-gradient(135deg, #0891B2 0%, #0F172A 100%);
+            border: 1px solid #06B6D4;
             border-radius: 12px;
             padding: 16px 20px;
             text-align: center;
+            color: #F8FAFC;
         }
 
         /* Section header */
@@ -384,7 +387,229 @@ st.markdown("""
             font-weight: 700;
             margin-bottom: 12px;
             padding-bottom: 8px;
-            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+            border-bottom: 1px solid #334155;
+        }
+
+        /* ── Assessment Card ── */
+        .assessment-card {
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            border: 1px solid #4338CA;
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 14px;
+            transition: all 0.3s ease;
+            color: #F8FAFC;
+        }
+        .assessment-card:hover {
+            border-color: #6366F1;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+        }
+
+        /* ── Vertical Activity Timeline ── */
+        .timeline-v-container {
+            position: relative;
+            padding-left: 32px;
+            margin: 16px 0;
+        }
+        .timeline-v-container::before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #6366F1, #10B981, #F59E0B);
+        }
+        .timeline-v-item {
+            position: relative;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            background: #1E293B;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            transition: all 0.25s ease;
+            color: #F8FAFC;
+        }
+        .timeline-v-item:hover {
+            background: #2D3748;
+            border-color: #6366F1;
+            transform: translateX(4px);
+        }
+        .timeline-v-item::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6366F1;
+            border: 2px solid #818CF8;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+        }
+        .timeline-v-time {
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .timeline-v-text {
+            font-size: 14px;
+            color: #F8FAFC;
+            font-weight: 600;
+        }
+
+        /* ── Verification Row ── */
+        .verification-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 18px 24px;
+            margin-bottom: 10px;
+            transition: all 0.25s ease;
+            color: #F8FAFC;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .verification-row:hover {
+            border-color: #6366F1;
+            transform: translateY(-2px);
+        }
+        .verification-label {
+            font-size: 16px;
+            font-weight: 700;
+            color: #F8FAFC;
+        }
+        .verification-status {
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        /* ── Prediction Card (Glassmorphism) ── */
+        .prediction-card {
+            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+            border-radius: 18px;
+            padding: 28px;
+            border: 1px solid #4C1D95;
+            box-shadow: 0 10px 32px 0 rgba(0, 0, 0, 0.25);
+            transition: all 0.35s ease;
+            color: #F8FAFC;
+        }
+        .prediction-card:hover {
+            transform: translateY(-4px);
+            border-color: #8B5CF6;
+            box-shadow: 0 16px 48px rgba(139, 92, 246, 0.25);
+        }
+        .prediction-header {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #C4B5FD;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .prediction-value {
+            font-size: 42px;
+            font-weight: 800;
+            color: #34D399;
+        }
+        .prediction-value-warn {
+            font-size: 42px;
+            font-weight: 800;
+            color: #FBBF24;
+        }
+
+        /* ── Source Badge ── */
+        .source-badge {
+            display: inline-block;
+            padding: 5px 14px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .source-linkedin { background: #1E3A8A; color: #93C5FD; border: 1px solid #3B82F6; }
+        .source-indeed { background: #1E293B; color: #60A5FA; border: 1px solid #3B82F6; }
+        .source-referral { background: #064E3B; color: #6EE7B7; border: 1px solid #10B981; }
+        .source-portal { background: #78350F; color: #FDE68A; border: 1px solid #F59E0B; }
+        .source-direct { background: #4C1D95; color: #C4B5FD; border: 1px solid #8B5CF6; }
+
+        /* ── Comment Bubble ── */
+        .comment-bubble {
+            background: #1E293B;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
+            border-left: 4px solid #6366F1;
+            transition: all 0.2s ease;
+            color: #F8FAFC;
+        }
+        .comment-bubble:hover {
+            border-left-color: #818CF8;
+            background: #2D3748;
+        }
+        .comment-author {
+            font-size: 13px;
+            font-weight: 700;
+            color: #A5B4FC;
+        }
+        .comment-time {
+            font-size: 11px;
+            color: #94A3B8;
+            margin-left: 8px;
+        }
+        .comment-text {
+            font-size: 14px;
+            color: #F1F5F9;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* ── Factor Check ── */
+        .factor-check {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #1E293B;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #F8FAFC;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .factor-check:hover {
+            background: #2D3748;
+            border-color: #10B981;
+            transform: translateX(4px);
+        }
+        .factor-icon {
+            color: #34D399;
+            font-weight: 800;
+            font-size: 18px;
+        }
+
+        /* ── Risk Level Badge ── */
+        .risk-low { background: #064E3B; color: #6EE7B7; border: 1px solid #10B981; padding: 6px 18px; border-radius: 50px; font-weight: 700; font-size: 14px; }
+        .risk-medium { background: #78350F; color: #FDE68A; border: 1px solid #F59E0B; padding: 6px 18px; border-radius: 50px; font-weight: 700; font-size: 14px; }
+        .risk-high { background: #7F1D1D; color: #FCA5A5; border: 1px solid #EF4444; padding: 6px 18px; border-radius: 50px; font-weight: 700; font-size: 14px; }
+
+        /* ── AI Recommendation Card ── */
+        .ai-rec-card {
+            background: linear-gradient(135deg, #064E3B 0%, #0F172A 100%);
+            border: 1px solid #059669;
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-top: 12px;
+            color: #F8FAFC;
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.15);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -402,6 +627,35 @@ if "current_page" not in st.session_state:
     st.session_state.current_page = "Dashboard"
 if "candidate_page" not in st.session_state:
     st.session_state.candidate_page = 0
+
+# ── Assessment Integration state ──
+if "assessment_data" not in st.session_state:
+    st.session_state.assessment_data = [
+        {"id": 1, "candidate_name": "Rahul Sharma", "candidate_email": "rahul@example.com", "type": "Technical", "status": "Completed", "score": 87, "assigned_date": "2026-08-10", "deadline": "2026-08-14", "time_taken": "42 min", "sections": {"Data Structures": 90, "Algorithms": 85, "System Design": 82, "SQL": 92}, "strengths": ["Strong algorithmic thinking", "Excellent SQL proficiency"], "recommendations": ["Practice system design patterns", "Review distributed systems concepts"]},
+        {"id": 2, "candidate_name": "Priya Desai", "candidate_email": "priya@example.com", "type": "Coding Challenge", "status": "In Progress", "score": None, "assigned_date": "2026-08-14", "deadline": "2026-08-18", "time_taken": None, "sections": {}, "strengths": [], "recommendations": []},
+        {"id": 3, "candidate_name": "Ayush Patel", "candidate_email": "ayush@example.com", "type": "Aptitude", "status": "Pending", "score": None, "assigned_date": "2026-08-15", "deadline": "2026-08-20", "time_taken": None, "sections": {}, "strengths": [], "recommendations": []},
+        {"id": 4, "candidate_name": "Sneha Kulkarni", "candidate_email": "sneha@example.com", "type": "Personality", "status": "Completed", "score": 74, "assigned_date": "2026-08-08", "deadline": "2026-08-12", "time_taken": "28 min", "sections": {"Communication": 80, "Teamwork": 78, "Leadership": 65, "Adaptability": 72}, "strengths": ["Excellent communicator", "Team-oriented mindset"], "recommendations": ["Develop leadership initiatives", "Seek cross-functional project exposure"]},
+    ]
+
+# ── Candidate Sourcing state ──
+if "sourced_candidates" not in st.session_state:
+    st.session_state.sourced_candidates = [
+        {"id": 1, "source": "LinkedIn", "name": "Amit Verma", "email": "amit.v@email.com", "phone": "+91-9876543210", "skills": "Python, Django, AWS", "experience": 5, "date_imported": "2026-08-12", "status": "Contacted"},
+        {"id": 2, "source": "Indeed", "name": "Kavita Nair", "email": "kavita.n@email.com", "phone": "+91-9123456789", "skills": "React, Node.js, MongoDB", "experience": 3, "date_imported": "2026-08-13", "status": "New"},
+        {"id": 3, "source": "Referral", "name": "Ravi Kumar", "email": "ravi.k@email.com", "phone": "+91-9988776655", "skills": "Java, Spring Boot, Kafka", "experience": 7, "date_imported": "2026-08-10", "status": "In Review"},
+        {"id": 4, "source": "Job Portal", "name": "Deepa Menon", "email": "deepa.m@email.com", "phone": "+91-9012345678", "skills": "ML, Python, TensorFlow", "experience": 4, "date_imported": "2026-08-14", "status": "Converted"},
+        {"id": 5, "source": "Direct Apply", "name": "Sanjay Gupta", "email": "sanjay.g@email.com", "phone": "+91-9567890123", "skills": "Go, Docker, Kubernetes", "experience": 6, "date_imported": "2026-08-15", "status": "New"},
+    ]
+
+# ── Collaboration state ──
+if "team_notes" not in st.session_state:
+    st.session_state.team_notes = {}
+if "recruiter_comments" not in st.session_state:
+    st.session_state.recruiter_comments = {}
+if "candidate_activity" not in st.session_state:
+    st.session_state.candidate_activity = {}
+if "assigned_recruiters" not in st.session_state:
+    st.session_state.assigned_recruiters = {}
 
 # Sidebar
 st.sidebar.title("💼 RecruiterAI")
@@ -681,7 +935,11 @@ else:
         "Candidates List",
         "Upload Resume",
         "Schedule Interview",
-        "Compare Candidates"
+        "Compare Candidates",
+        "Assessment Integration",
+        "Candidate Sourcing",
+        "Reference & Verification",
+        "Predictive Analytics",
     ]
     if st.session_state.role == "Admin":
         nav_options.append("Admin Settings")
@@ -975,6 +1233,195 @@ else:
                     st.rerun()
                 else:
                     st.error("Failed to save feedback.")
+
+        # ─── COLLABORATION & ACTIVITY SECTION ──────────────────────────────────
+        st.markdown("---")
+        st.markdown("## 🤝 Collaboration & Activity")
+        st.markdown("Team collaboration tools, activity timeline, and recruiter assignments for this candidate.")
+
+        collab_tab1, collab_tab2, collab_tab3, collab_tab4 = st.tabs([
+            "💬 Recruiter Comments", "📝 Team Notes", "📊 Activity Timeline", "👔 Assigned Recruiter"
+        ])
+
+        cand_id_key = str(cand['id'])
+
+        # ── Tab 1: Recruiter Comments ──────────────────────────────────────
+        with collab_tab1:
+            st.markdown("### 💬 Recruiter Comments Thread")
+            st.caption("Add and view threaded comments from the recruiting team.")
+
+            # Initialize default comments for this candidate if none exist
+            if cand_id_key not in st.session_state.recruiter_comments:
+                st.session_state.recruiter_comments[cand_id_key] = [
+                    {"author": "recruiter_user", "text": f"Reviewed {cand['name']}'s profile. Strong technical background, recommend moving to next stage.", "time": "2026-08-14 10:30 AM"},
+                    {"author": "manager_user", "text": "Agreed. Let's schedule a technical interview this week.", "time": "2026-08-14 02:15 PM"},
+                ]
+
+            # Display existing comments
+            comments = st.session_state.recruiter_comments[cand_id_key]
+            if comments:
+                for comment in comments:
+                    st.markdown(f"""
+                        <div class="comment-bubble">
+                            <span class="comment-author">👤 {comment['author']}</span>
+                            <span class="comment-time">🕐 {comment['time']}</span>
+                            <div class="comment-text">{comment['text']}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No comments yet. Be the first to add a note!")
+
+            # Add new comment
+            new_comment = st.text_area("Add a comment:", placeholder="Type your observation, feedback, or note here...", height=80, key=f"new_comment_{cand['id']}")
+            if st.button("💬 Post Comment", key=f"post_comment_{cand['id']}", type="primary"):
+                if new_comment.strip():
+                    st.session_state.recruiter_comments[cand_id_key].append({
+                        "author": st.session_state.username or "Unknown",
+                        "text": new_comment.strip(),
+                        "time": datetime.now().strftime("%Y-%m-%d %I:%M %p")
+                    })
+                    st.toast("Comment posted successfully!", icon="💬")
+                    time.sleep(0.3)
+                    st.rerun()
+                else:
+                    st.warning("Please enter a comment before posting.")
+
+        # ── Tab 2: Team Notes ──────────────────────────────────────────────
+        with collab_tab2:
+            st.markdown("### 📝 Shared Team Notes")
+            st.caption("Collaborative notes shared across the hiring team for this candidate.")
+
+            existing_notes = st.session_state.team_notes.get(cand_id_key, f"## Notes for {cand['name']}\n\n- Strong candidate with relevant experience\n- Good cultural fit potential\n- Follow up on references\n")
+            updated_notes = st.text_area(
+                "Team Notes (Markdown supported):",
+                value=existing_notes,
+                height=200,
+                key=f"team_notes_{cand['id']}"
+            )
+
+            if st.button("💾 Save Team Notes", key=f"save_notes_{cand['id']}", type="primary", use_container_width=True):
+                st.session_state.team_notes[cand_id_key] = updated_notes
+                st.toast("Team notes saved!", icon="📝")
+                time.sleep(0.3)
+                st.rerun()
+
+            st.markdown("---")
+            st.markdown("#### 📋 Notes Preview")
+            st.markdown(updated_notes)
+
+        # ── Tab 3: Activity Timeline ───────────────────────────────────────
+        with collab_tab3:
+            st.markdown("### 📊 Candidate Activity Timeline")
+            st.caption("Complete chronological record of all candidate interactions and status changes.")
+
+            # Build activity timeline (default + stored)
+            if cand_id_key not in st.session_state.candidate_activity:
+                candidate_name = cand['name']
+                st.session_state.candidate_activity[cand_id_key] = [
+                    {"time": "2026-08-10 09:00 AM", "event": f"📄 {candidate_name} resume uploaded", "icon": "📄"},
+                    {"time": "2026-08-10 09:05 AM", "event": f"🔍 Resume parsed and profile created", "icon": "🔍"},
+                    {"time": "2026-08-11 11:30 AM", "event": f"⭐ {candidate_name} shortlisted", "icon": "⭐"},
+                    {"time": "2026-08-12 02:00 PM", "event": f"👔 Assigned to Ayush (Recruiter)", "icon": "👔"},
+                    {"time": "2026-08-13 04:30 PM", "event": f"📝 Assessment completed", "icon": "📝"},
+                    {"time": "2026-08-14 10:00 AM", "event": f"📅 Interview scheduled", "icon": "📅"},
+                    {"time": "2026-08-14 10:30 AM", "event": f"💬 Recruiter comment added", "icon": "💬"},
+                ]
+
+            activities = st.session_state.candidate_activity[cand_id_key]
+
+            st.markdown('<div class="timeline-v-container">', unsafe_allow_html=True)
+            for activity in activities:
+                st.markdown(f"""
+                    <div class="timeline-v-item">
+                        <div class="timeline-v-time">{activity['time']}</div>
+                        <div class="timeline-v-text">{activity['event']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Add custom activity entry
+            st.markdown("---")
+            st.markdown("#### ➕ Log Custom Activity")
+            act_col1, act_col2 = st.columns([3, 1])
+            with act_col1:
+                custom_activity = st.text_input("Activity description:", placeholder="e.g. Reference check initiated...", key=f"custom_act_{cand['id']}")
+            with act_col2:
+                act_icon = st.selectbox("Icon:", ["📄", "⭐", "📅", "💬", "👔", "📝", "✅", "❌", "🔍", "🎯"], key=f"act_icon_{cand['id']}")
+            if st.button("➕ Add Activity", key=f"add_act_{cand['id']}"):
+                if custom_activity.strip():
+                    st.session_state.candidate_activity[cand_id_key].append({
+                        "time": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                        "event": f"{act_icon} {custom_activity.strip()}",
+                        "icon": act_icon
+                    })
+                    st.toast("Activity logged!", icon="✅")
+                    time.sleep(0.3)
+                    st.rerun()
+
+        # ── Tab 4: Assigned Recruiter ──────────────────────────────────────
+        with collab_tab4:
+            st.markdown("### 👔 Recruiter Assignment")
+            st.caption("Assign or reassign a recruiter to manage this candidate.")
+
+            recruiter_list = ["recruiter_user", "Ayush Patel", "Sarah Johnson", "Priya Mehta", "Rahul Gupta"]
+            current_recruiter = st.session_state.assigned_recruiters.get(cand_id_key, "recruiter_user")
+
+            st.markdown(f"""
+                <div class="profile-container" style="padding: 16px; border-left: 4px solid #6366F1;">
+                    <b style="color: #E5E7EB; font-size: 15px;">Currently Assigned:</b>
+                    <span style="color: #818CF8; font-weight: 700; font-size: 16px; margin-left: 8px;">👤 {current_recruiter}</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            new_recruiter = st.selectbox(
+                "Reassign to:",
+                recruiter_list,
+                index=recruiter_list.index(current_recruiter) if current_recruiter in recruiter_list else 0,
+                key=f"reassign_rec_{cand['id']}"
+            )
+
+            if st.button("🔄 Update Assignment", key=f"update_assign_{cand['id']}", type="primary", use_container_width=True):
+                st.session_state.assigned_recruiters[cand_id_key] = new_recruiter
+                # Log activity
+                if cand_id_key not in st.session_state.candidate_activity:
+                    st.session_state.candidate_activity[cand_id_key] = []
+                st.session_state.candidate_activity[cand_id_key].append({
+                    "time": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                    "event": f"👔 Reassigned to {new_recruiter}",
+                    "icon": "👔"
+                })
+                st.toast(f"Candidate reassigned to {new_recruiter}!", icon="👔")
+                time.sleep(0.3)
+                st.rerun()
+
+            # Quick status update from here
+            st.markdown("---")
+            st.markdown("#### ⚡ Quick Status Update")
+            quick_statuses = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Rejected"]
+            curr_status = cand.get("status", "Applied")
+            curr_idx = quick_statuses.index(curr_status) if curr_status in quick_statuses else 0
+            new_quick_status = st.selectbox("Update Status:", quick_statuses, index=curr_idx, key=f"quick_status_{cand['id']}")
+
+            if new_quick_status != curr_status:
+                if st.button(f"✅ Update to {new_quick_status}", key=f"quick_update_{cand['id']}", type="primary"):
+                    with st.spinner("Updating status..."):
+                        up_res = api_request("PATCH", f"/candidate/{cand['id']}/status", json={"status": new_quick_status})
+                        if up_res and up_res.status_code == 200:
+                            # Log activity
+                            if cand_id_key not in st.session_state.candidate_activity:
+                                st.session_state.candidate_activity[cand_id_key] = []
+                            st.session_state.candidate_activity[cand_id_key].append({
+                                "time": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                                "event": f"🔄 Status changed from {curr_status} to {new_quick_status}",
+                                "icon": "🔄"
+                            })
+                            st.toast(f"Status updated to {new_quick_status}!", icon="✅")
+                            time.sleep(0.3)
+                            st.rerun()
+                        else:
+                            st.error("Failed to update status.")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # A2-12. RECRUITMENT REPORTS PAGE
@@ -2795,6 +3242,578 @@ else:
                     st.success(f"Successfully seeded **{success_count}** job requirements!")
                 else:
                     st.error("Failed to seed jobs. Check backend connection.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. ASSESSMENT INTEGRATION UI
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Assessment Integration":
+        st.title("📝 Assessment Integration & Evaluation")
+        st.markdown("Assign assessments, track completion statuses, inspect scores, and review detailed evaluation results.")
+        st.markdown("---")
+
+        with st.spinner("Loading candidate list..."):
+            cand_res = api_request("GET", "/candidate")
+        candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
+
+        tab_assign, tab_status, tab_results = st.tabs([
+            "➕ Assign Assessment", "📋 Assessment Status", "📊 Scores & Results"
+        ])
+
+        # ── Tab 1: Assign Assessment ──────────────────────────────────────────
+        with tab_assign:
+            st.subheader("Assign New Assessment")
+            col_a1, col_a2 = st.columns([1.2, 1])
+
+            with col_a1:
+                with st.container(border=True):
+                    cand_names = [f"{c['name']} ({c['email']})" for c in candidates] if candidates else ["Rahul Sharma (rahul@example.com)", "Priya Desai (priya@example.com)", "Ayush Patel (ayush@example.com)"]
+                    sel_cand_assign = st.selectbox("Select Candidate *", cand_names, key="assign_cand_select")
+
+                    ass_type = st.selectbox("Assessment Type *", [
+                        "Technical Assessment", "Coding Challenge", "Aptitude Test", "Personality & Culture Fit", "System Design Challenge"
+                    ])
+
+                    deadline_date = st.date_input("Submission Deadline *", value=date.today() + timedelta(days=5))
+                    notes_assign = st.text_area("Instructions / Notes for Candidate", placeholder="e.g. Complete within 60 minutes once started...")
+
+                    if st.button("🚀 Assign Assessment Now", type="primary", use_container_width=True):
+                        c_name = sel_cand_assign.split(" (")[0]
+                        c_email = sel_cand_assign.split("(")[1].rstrip(")") if "(" in sel_cand_assign else "candidate@example.com"
+                        new_item = {
+                            "id": len(st.session_state.assessment_data) + 1,
+                            "candidate_name": c_name,
+                            "candidate_email": c_email,
+                            "type": ass_type.replace(" Assessment", "").replace(" Test", "").replace(" Challenge", ""),
+                            "status": "Pending",
+                            "score": None,
+                            "assigned_date": date.today().strftime("%Y-%m-%d"),
+                            "deadline": str(deadline_date),
+                            "time_taken": None,
+                            "sections": {},
+                            "strengths": [],
+                            "recommendations": []
+                        }
+                        st.session_state.assessment_data.append(new_item)
+                        st.toast(f"Assessment assigned to {c_name}!", icon="🎯")
+                        time.sleep(0.4)
+                        st.rerun()
+
+            with col_a2:
+                st.info("💡 **Assessment Guidelines:**\n- Candidates will receive an automated invitation link.\n- Results automatically sync back to candidate scorecards.\n- Minimum passing score threshold: **70%**.")
+                st.markdown("""
+                    #### Available Test Suites
+                    - 💻 **Technical Assessment:** Algorithms, Data Structures, SQL
+                    - ⚡ **Coding Challenge:** Live sandboxed programming
+                    - 🧠 **Aptitude Test:** Numerical & Logical reasoning
+                    - 🤝 **Personality & Culture Fit:** Behavioral matrix
+                """)
+
+        # ── Tab 2: Assessment Status ──────────────────────────────────────────
+        with tab_status:
+            st.subheader("📋 Candidate Assessment Tracker")
+            
+            assessments = st.session_state.assessment_data
+            
+            # Metric row
+            total_ass = len(assessments)
+            comp_ass = sum(1 for a in assessments if a["status"] == "Completed")
+            prog_ass = sum(1 for a in assessments if a["status"] == "In Progress")
+            pend_ass = sum(1 for a in assessments if a["status"] == "Pending")
+
+            sm1, sm2, sm3, sm4 = st.columns(4)
+            sm1.markdown(f'<div class="metric-card"><div class="metric-title">Total Assigned</div><div class="metric-value">{total_ass}</div></div>', unsafe_allow_html=True)
+            sm2.markdown(f'<div class="metric-card"><div class="metric-title">Completed</div><div class="metric-value" style="color:#10B981;">{comp_ass}</div></div>', unsafe_allow_html=True)
+            sm3.markdown(f'<div class="metric-card"><div class="metric-title">In Progress</div><div class="metric-value" style="color:#3B82F6;">{prog_ass}</div></div>', unsafe_allow_html=True)
+            sm4.markdown(f'<div class="metric-card"><div class="metric-title">Pending</div><div class="metric-value" style="color:#F59E0B;">{pend_ass}</div></div>', unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Table view
+            df_ass = pd.DataFrame(assessments)
+            if not df_ass.empty:
+                display_df = df_ass[["candidate_name", "candidate_email", "type", "assigned_date", "deadline", "status", "score"]].copy()
+                display_df.columns = ["Candidate", "Email", "Type", "Assigned Date", "Deadline", "Status", "Score %"]
+                display_df["Score %"] = display_df["Score %"].apply(lambda v: f"{v}%" if pd.notnull(v) and v is not None else "N/A")
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.subheader("⚡ Update Assessment Status")
+            up_col1, up_col2, up_col3 = st.columns([2, 1.5, 1])
+            with up_col1:
+                ass_opts = {f"{a['candidate_name']} — {a['type']} ({a['status']})": a["id"] for a in assessments}
+                sel_ass_label = st.selectbox("Select Assessment:", list(ass_opts.keys()), key="status_ass_sel")
+                sel_ass_id = ass_opts[sel_ass_label]
+            with up_col2:
+                new_ass_st = st.selectbox("New Status:", ["Pending", "In Progress", "Completed", "Expired"], key="new_ass_st_sel")
+            with up_col3:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Update Status", key="btn_update_ass_st"):
+                    for a in st.session_state.assessment_data:
+                        if a["id"] == sel_ass_id:
+                            a["status"] = new_ass_st
+                            if new_ass_st == "Completed" and a["score"] is None:
+                                a["score"] = 82
+                                a["time_taken"] = "35 min"
+                                a["sections"] = {"Core Skills": 85, "Problem Solving": 80}
+                                a["strengths"] = ["Good execution speed"]
+                                a["recommendations"] = ["Continue practicing complex scenarios"]
+                    st.toast("Assessment status updated!", icon="✅")
+                    time.sleep(0.3)
+                    st.rerun()
+
+        # ── Tab 3: Scores & Results ────────────────────────────────────────────
+        with tab_results:
+            st.subheader("📊 Assessment Scorecards & Deep Dive")
+
+            completed_items = [a for a in st.session_state.assessment_data if a["status"] == "Completed"]
+
+            if not completed_items:
+                st.info("No completed assessments available yet.")
+            else:
+                comp_opts = {f"{a['candidate_name']} ({a['type']}) — Score: {a['score']}%": a for a in completed_items}
+                sel_comp_label = st.selectbox("Select Assessment Result to Inspect:", list(comp_opts.keys()), key="comp_inspect_sel")
+                ass_res = comp_opts[sel_comp_label]
+
+                col_res1, col_res2 = st.columns([1.2, 1])
+
+                with col_res1:
+                    st.markdown(f"""
+                        <div class="assessment-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <h3 style="margin:0; color:#E5E7EB;">👤 {ass_res['candidate_name']}</h3>
+                                    <p style="color:#9CA3AF; margin:4px 0 0 0; font-size:13px;">Assessment Type: <b>{ass_res['type']}</b> | Time Taken: <b>{ass_res.get('time_taken', 'N/A')}</b></p>
+                                </div>
+                                <div style="text-align:right;">
+                                    <span class="badge badge-shortlisted" style="font-size:16px; padding:6px 16px;">Score: {ass_res['score']}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    st.markdown("#### 🎯 Section-wise Breakdown")
+                    sections = ass_res.get("sections", {})
+                    if sections:
+                        sec_df = pd.DataFrame(list(sections.items()), columns=["Section", "Score %"])
+                        fig_sec = px.bar(
+                            sec_df, x="Score %", y="Section", orientation="h", text="Score %",
+                            color="Score %", color_continuous_scale="Viridis"
+                        )
+                        fig_sec.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", coloraxis_showscale=False, height=220, margin=dict(t=10, b=10))
+                        fig_sec.update_traces(textposition="outside")
+                        st.plotly_chart(fig_sec, use_container_width=True)
+                    else:
+                        st.caption("No section details provided.")
+
+                with col_res2:
+                    st.markdown("#### 💪 Key Strengths")
+                    for s in ass_res.get("strengths", ["Strong analytical approach"]):
+                        st.markdown(f"✅ {s}")
+
+                    st.markdown("#### 💡 AI Recommendations & Next Steps")
+                    for r in ass_res.get("recommendations", ["Proceed to technical interview stage"]):
+                        st.markdown(f"📌 {r}")
+
+                    st.markdown("---")
+                    fig_gauge = go.Figure(go.Indicator(
+                        mode="gauge+number", value=ass_res['score'],
+                        title={"text": "Overall Score"},
+                        gauge={
+                            "axis": {"range": [0, 100]},
+                            "bar": {"color": "#10B981" if ass_res['score'] >= 70 else "#F59E0B"},
+                            "steps": [
+                                {"range": [0, 50], "color": "rgba(239,68,68,0.1)"},
+                                {"range": [50, 70], "color": "rgba(245,158,11,0.1)"},
+                                {"range": [70, 100], "color": "rgba(16,185,129,0.1)"}
+                            ]
+                        }
+                    ))
+                    fig_gauge.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", height=180, margin=dict(t=30, b=10))
+                    st.plotly_chart(fig_gauge, use_container_width=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. CANDIDATE SOURCING UI
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Candidate Sourcing":
+        st.title("🎯 Candidate Sourcing & Acquisition")
+        st.markdown("Track multi-channel candidate sources, manage imported leads, and import new candidate profiles.")
+        st.markdown("---")
+
+        sourced = st.session_state.sourced_candidates
+
+        # Metric summary
+        src_counts = Counter(s["source"] for s in sourced)
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.markdown(f'<div class="metric-card"><div class="metric-title">LinkedIn</div><div class="metric-value" style="color:#60A5FA;">{src_counts.get("LinkedIn", 0)}</div></div>', unsafe_allow_html=True)
+        m2.markdown(f'<div class="metric-card"><div class="metric-title">Indeed</div><div class="metric-value" style="color:#93C5FD;">{src_counts.get("Indeed", 0)}</div></div>', unsafe_allow_html=True)
+        m3.markdown(f'<div class="metric-card"><div class="metric-title">Referrals</div><div class="metric-value" style="color:#34D399;">{src_counts.get("Referral", 0)}</div></div>', unsafe_allow_html=True)
+        m4.markdown(f'<div class="metric-card"><div class="metric-title">Job Portals</div><div class="metric-value" style="color:#FCD34D;">{src_counts.get("Job Portal", 0)}</div></div>', unsafe_allow_html=True)
+        m5.markdown(f'<div class="metric-card"><div class="metric-title">Direct Apply</div><div class="metric-value" style="color:#A78BFA;">{src_counts.get("Direct Apply", 0)}</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        tab_sources, tab_import = st.tabs(["📋 Candidate Sources Table", "📥 Import Candidate"])
+
+        # ── Tab 1: Candidate Sources Table ─────────────────────────────────────
+        with tab_sources:
+            st.subheader("Candidate Sources")
+
+            filter_c1, filter_c2 = st.columns(2)
+            with filter_c1:
+                sel_src_filter = st.selectbox("Filter by Source:", ["All", "LinkedIn", "Indeed", "Referral", "Job Portal", "Direct Apply"])
+            with filter_c2:
+                sel_st_filter = st.selectbox("Filter by Status:", ["All", "New", "Contacted", "In Review", "Converted"])
+
+            filtered_sourced = sourced
+            if sel_src_filter != "All":
+                filtered_sourced = [s for s in filtered_sourced if s["source"] == sel_src_filter]
+            if sel_st_filter != "All":
+                filtered_sourced = [s for s in filtered_sourced if s["status"] == sel_st_filter]
+
+            # Render Table
+            hdr1, hdr2, hdr3, hdr4, hdr5 = st.columns([1.5, 2.5, 1.5, 1.5, 1])
+            hdr1.markdown("**Source**")
+            hdr2.markdown("**Candidate**")
+            hdr3.markdown("**Date Imported**")
+            hdr4.markdown("**Status**")
+            hdr5.markdown("**Action**")
+            st.markdown("<hr style='margin: 4px 0 12px 0; border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+
+            source_css_map = {
+                "LinkedIn": "source-linkedin", "Indeed": "source-indeed",
+                "Referral": "source-referral", "Job Portal": "source-portal",
+                "Direct Apply": "source-direct"
+            }
+
+            for idx, cand in enumerate(filtered_sourced):
+                row_c1, row_c2, row_c3, row_c4, row_c5 = st.columns([1.5, 2.5, 1.5, 1.5, 1])
+
+                css_cls = source_css_map.get(cand["source"], "badge badge-skill")
+                with row_c1:
+                    st.markdown(f'<span class="source-badge {css_cls}">{cand["source"]}</span>', unsafe_allow_html=True)
+                with row_c2:
+                    st.markdown(f"**{cand['name']}**<br><span style='font-size:12px; color:#9CA3AF;'>{cand['email']}</span>", unsafe_allow_html=True)
+                with row_c3:
+                    st.markdown(f"<span style='color:#9CA3AF;'>{cand['date_imported']}</span>", unsafe_allow_html=True)
+                with row_c4:
+                    st.markdown(f"<span class='badge badge-skill'>{cand['status']}</span>", unsafe_allow_html=True)
+                with row_c5:
+                    if st.button("View", key=f"view_src_{cand['id']}"):
+                        st.info(f"**Candidate:** {cand['name']}\n**Skills:** {cand['skills']}\n**Experience:** {cand['experience']} yrs\n**Phone:** {cand['phone']}")
+
+                st.markdown("<hr style='margin: 4px 0; border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+
+        # ── Tab 2: Import Candidate Form ───────────────────────────────────────
+        with tab_import:
+            st.subheader("📥 Import New Sourced Candidate")
+            st.markdown("Manually add a candidate lead from external sources.")
+
+            with st.container(border=True):
+                imp_c1, imp_c2 = st.columns(2)
+                with imp_c1:
+                    imp_name = st.text_input("Candidate Full Name *", placeholder="e.g. Vikramaditya Singh")
+                    imp_email = st.text_input("Email Address *", placeholder="e.g. vikram@email.com")
+                    imp_source = st.selectbox("Sourcing Channel *", ["LinkedIn", "Indeed", "Referral", "Job Portal", "Direct Apply"])
+                with imp_c2:
+                    imp_phone = st.text_input("Phone Number", placeholder="e.g. +91-9876543210")
+                    imp_exp = st.number_input("Years of Experience", min_value=0, max_value=30, value=3)
+                    imp_skills = st.text_input("Skills (comma-separated)", placeholder="e.g. Python, React, SQL")
+
+                if st.button("📥 Import Candidate Now", type="primary", use_container_width=True):
+                    if not imp_name.strip() or not imp_email.strip():
+                        st.error("Please fill in candidate name and email.")
+                    else:
+                        new_sourced = {
+                            "id": len(st.session_state.sourced_candidates) + 1,
+                            "source": imp_source,
+                            "name": imp_name.strip(),
+                            "email": imp_email.strip(),
+                            "phone": imp_phone.strip() if imp_phone.strip() else "N/A",
+                            "skills": imp_skills.strip() if imp_skills.strip() else "General",
+                            "experience": imp_exp,
+                            "date_imported": date.today().strftime("%Y-%m-%d"),
+                            "status": "New"
+                        }
+                        st.session_state.sourced_candidates.append(new_sourced)
+                        st.toast(f"Candidate {imp_name} imported from {imp_source}!", icon="🎉")
+                        time.sleep(0.4)
+                        st.rerun()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. REFERENCE & VERIFICATION UI
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Reference & Verification":
+        st.title("🛡️ Candidate Reference & Verification")
+        st.markdown("Verify reference checks, background credentials, and assess candidate risk profiles.")
+        st.markdown("---")
+
+        with st.spinner("Loading candidate profiles..."):
+            cand_res = api_request("GET", "/candidate")
+        candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
+
+        if not candidates:
+            candidates = [
+                {"id": 1, "name": "Rahul Sharma", "email": "rahul@example.com"},
+                {"id": 2, "name": "Priya Desai", "email": "priya@example.com"},
+            ]
+
+        cand_map = {f"{c['name']} ({c['email']})": c for c in candidates}
+        selected_v_label = st.selectbox("Select Candidate to View Verification:", list(cand_map.keys()), key="verif_cand_sel")
+        selected_v_cand = cand_map[selected_v_label]
+
+        st.markdown(f"### Candidate Details → Verification: **{selected_v_cand['name']}**")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Verification Overview Cards
+        v_col1, v_col2, v_col3 = st.columns(3)
+
+        with v_col1:
+            st.markdown("""
+                <div class="verification-row">
+                    <div>
+                        <div class="verification-label">Reference Check</div>
+                        <div style="font-size:12px; color:#CBD5E1; font-weight:600; margin-top:4px;">2/2 References Verified</div>
+                    </div>
+                    <span class="verification-status" style="background:#064E3B; color:#6EE7B7; border:1px solid #10B981;">Completed</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with v_col2:
+            st.markdown("""
+                <div class="verification-row">
+                    <div>
+                        <div class="verification-label">Background Check</div>
+                        <div style="font-size:12px; color:#CBD5E1; font-weight:600; margin-top:4px;">Identity & Employment</div>
+                    </div>
+                    <span class="verification-status" style="background:#78350F; color:#FDE68A; border:1px solid #F59E0B;">In Progress</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with v_col3:
+            st.markdown("""
+                <div class="verification-row">
+                    <div>
+                        <div class="verification-label">Verification Risk</div>
+                        <div style="font-size:12px; color:#CBD5E1; font-weight:600; margin-top:4px;">Overall Risk Rating</div>
+                    </div>
+                    <span class="risk-low">Low Risk</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Tabs for detailed verification results
+        v_tab1, v_tab2, v_tab3 = st.tabs(["📞 Reference Check Details", "🔎 Background Check Report", "⚠️ Risk Factors & Analysis"])
+
+        with v_tab1:
+            st.subheader("📞 Professional Reference Checks")
+
+            ref1, ref2 = st.columns(2)
+            with ref1:
+                with st.container(border=True):
+                    st.markdown("#### Reference #1: Previous Manager")
+                    st.write("**Name:** Rajesh Malhotra")
+                    st.write("**Title:** VP of Engineering, TechCorp Solutions")
+                    st.write("**Relationship:** Direct Manager (2022 - 2025)")
+                    st.write("**Feedback:** *' Rahul was an outstanding software engineer. Consistently delivered complex projects on time and mentored junior team members. Highly recommend.'*")
+                    st.success("✅ Rating: 5/5 Stars — Verified")
+
+            with ref2:
+                with st.container(border=True):
+                    st.markdown("#### Reference #2: Peer / Lead")
+                    st.write("**Name:** Ananya Sharma")
+                    st.write("**Title:** Tech Lead, CloudStack Systems")
+                    st.write("**Relationship:** Senior Teammate")
+                    st.write("**Feedback:** *' Exceptional technical skills, great problem solver, and very easy to collaborate with.'*")
+                    st.success("✅ Rating: 4.8/5 Stars — Verified")
+
+        with v_tab2:
+            st.subheader("🔎 Background Verification Report")
+            st.caption("Verification performed via Checkr / InstantID Service Provider")
+
+            bg_data = [
+                {"Verification Check": "Identity & SSN/Aadhaar Trace", "Status": "Passed ✅", "Provider": "Checkr ID", "Timestamp": "2026-08-11"},
+                {"Verification Check": "Highest Degree & Education", "Status": "Passed ✅", "Provider": "National Clearinghouse", "Timestamp": "2026-08-12"},
+                {"Verification Check": "Past Employment (Last 5 Yrs)", "Status": "Passed ✅", "Provider": "WorkNumber API", "Timestamp": "2026-08-13"},
+                {"Verification Check": "Criminal Background Check", "Status": "In Progress ⏳", "Provider": "Global Security Audit", "Timestamp": "2026-08-14"},
+            ]
+            st.table(bg_data)
+
+        with v_tab3:
+            st.subheader("⚠️ AI Verification Risk Matrix")
+
+            rc1, rc2 = st.columns([1.2, 1])
+            with rc1:
+                st.markdown("""
+                    <div class="factor-check">
+                        <span class="factor-icon">✓</span>
+                        <span><b>Identity Authenticity:</b> 100% Match on Government Identification</span>
+                    </div>
+                    <div class="factor-check">
+                        <span class="factor-icon">✓</span>
+                        <span><b>Employment History:</b> Dates match resume claims within 1 month accuracy</span>
+                    </div>
+                    <div class="factor-check">
+                        <span class="factor-icon">✓</span>
+                        <span><b>Degree Validation:</b> Accredited University degree confirmed</span>
+                    </div>
+                    <div class="factor-check">
+                        <span class="factor-icon">✓</span>
+                        <span><b>Reference Feedback Consistency:</b> Highly aligned with interview evaluation</span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            with rc2:
+                st.markdown("""
+                    <div class="prediction-card">
+                        <div class="prediction-header">Overall Risk Score</div>
+                        <div class="prediction-value">4.2%</div>
+                        <div style="font-size:13px; color:#9CA3AF; margin-top:8px;">
+                            Very low risk profile. High confidence for offer issuance.
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. PREDICTIVE ANALYTICS DASHBOARD ⭐
+    # ═══════════════════════════════════════════════════════════════════════════
+    elif choice == "Predictive Analytics":
+        st.title("⭐ Predictive Analytics & AI Hiring Predictions")
+        st.markdown("AI-driven predictive hiring insights, retention probability modeling, and risk factors analysis.")
+        st.markdown("---")
+
+        with st.spinner("Loading predictive models..."):
+            cand_res = api_request("GET", "/candidate")
+        candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
+
+        # Candidate Selector for prediction
+        cand_map = {f"{c['name']} ({c['email']})": c for c in candidates} if candidates else {
+            "Rahul Sharma (rahul@example.com)": {"name": "Rahul Sharma", "email": "rahul@example.com", "final_score": 87, "experience": 5},
+            "Priya Desai (priya@example.com)": {"name": "Priya Desai", "email": "priya@example.com", "final_score": 76, "experience": 3},
+        }
+
+        col_ps1, col_ps2 = st.columns([2, 1])
+        with col_ps1:
+            sel_p_label = st.selectbox("🎯 Select Candidate for AI Hiring Prediction:", list(cand_map.keys()), key="predict_cand_sel")
+            sel_p_cand = cand_map[sel_p_label]
+        with col_ps2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.caption(f"Predictive Model: **HR-AI-v4.2** | Confidence: **94.8%**")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Section 1: AI Hiring Prediction Panel ─────────────────────────────
+        st.subheader("🤖 AI Hiring Prediction")
+
+        pred_c1, pred_c2, pred_c3 = st.columns(3)
+
+        cand_score = sel_p_cand.get("final_score", 87)
+        hiring_success = min(98, max(50, int(cand_score * 0.95 + 4)))
+        retention_prob = min(95, max(45, int(cand_score * 0.88 + 8)))
+
+        with pred_c1:
+            st.markdown(f"""
+                <div class="prediction-card">
+                    <div class="prediction-header">Hiring Success</div>
+                    <div class="prediction-value">{hiring_success}%</div>
+                    <div style="font-size:13px; color:#9CA3AF; margin-top:8px;">Predicted performance success rate</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with pred_c2:
+            st.markdown(f"""
+                <div class="prediction-card">
+                    <div class="prediction-header">Retention Probability</div>
+                    <div class="prediction-value">{retention_prob}%</div>
+                    <div style="font-size:13px; color:#9CA3AF; margin-top:8px;">Predicted 2-year retention likelihood</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with pred_c3:
+            st.markdown(f"""
+                <div class="prediction-card">
+                    <div class="prediction-header">Risk Level</div>
+                    <div style="margin: 12px 0;">
+                        <span class="risk-low">LOW</span>
+                    </div>
+                    <div style="font-size:13px; color:#9CA3AF; margin-top:16px;">Minimal attrition & flight risk</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Section 2: Key Factors & AI Recommendation ────────────────────────
+        col_f1, col_f2 = st.columns(2)
+
+        with col_f1:
+            st.subheader("🔑 Key Factors")
+            st.markdown("""
+                <div class="factor-check">
+                    <span class="factor-icon">✓</span>
+                    <span><b>Strong skill match:</b> Exceeds core technical requirements by 15%</span>
+                </div>
+                <div class="factor-check">
+                    <span class="factor-icon">✓</span>
+                    <span><b>Relevant experience:</b> 5+ years in domain-aligned engineering roles</span>
+                </div>
+                <div class="factor-check">
+                    <span class="factor-icon">✓</span>
+                    <span><b>Good screening score:</b> Ranked top 10% in initial screening</span>
+                </div>
+                <div class="factor-check">
+                    <span class="factor-icon">✓</span>
+                    <span><b>High career stability:</b> Average tenure of 2.5 years per organization</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_f2:
+            st.subheader("💡 AI Recommendation")
+            st.markdown("""
+                <div class="ai-rec-card">
+                    <h3 style="margin:0; color:#34D399;">🌟 High Potential Candidate</h3>
+                    <p style="color:#D1D5DB; margin-top:10px; font-size:15px; line-height:1.6;">
+                        This candidate demonstrates <b>high potential for fast onboarding</b> and <b>long-term success</b> in the organization. Recommended for immediate offer release with senior mentoring track.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+
+        # ── Section 3: Hiring Predictions Report & Charts ─────────────────────
+        st.subheader("📊 Hiring Predictions Report & Analytics")
+
+        rep_c1, rep_c2 = st.columns(2)
+
+        with rep_c1:
+            st.markdown("#### 📈 Predicted Hiring Success Trend (6-Month Forecast)")
+            months = ["Sep 2026", "Oct 2026", "Nov 2026", "Dec 2026", "Jan 2027", "Feb 2027"]
+            trend_df = pd.DataFrame({
+                "Month": months,
+                "Success Rate (%)": [82, 85, 84, 88, 87, 91],
+                "Benchmark (%)": [75, 75, 75, 75, 75, 75]
+            })
+            fig_trend = px.line(
+                trend_df, x="Month", y=["Success Rate (%)", "Benchmark (%)"],
+                markers=True, color_discrete_sequence=["#10B981", "#6B7280"]
+            )
+            fig_trend.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", height=280, margin=dict(t=10, b=10))
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+        with rep_c2:
+            st.markdown("#### 🎯 Score vs. Predicted Retention Probability")
+            scatter_data = pd.DataFrame({
+                "Match Score (%)": [87, 76, 92, 65, 84, 95, 58],
+                "Retention Prob (%)": [81, 74, 90, 60, 83, 94, 52],
+                "Candidate": ["Rahul", "Priya", "Amit", "Kavita", "Ravi", "Deepa", "Sanjay"]
+            })
+            fig_scat = px.scatter(
+                scatter_data, x="Match Score (%)", y="Retention Prob (%)",
+                text="Candidate", size="Match Score (%)", color="Retention Prob (%)",
+                color_continuous_scale="Teal"
+            )
+            fig_scat.update_traces(textposition="top center")
+            fig_scat.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB", coloraxis_showscale=False, height=280, margin=dict(t=10, b=10))
+            st.plotly_chart(fig_scat, use_container_width=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # CANDIDATE PROFILE & STATUS PAGE
