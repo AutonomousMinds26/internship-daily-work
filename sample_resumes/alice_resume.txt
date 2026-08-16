@@ -1,0 +1,9 @@
+Alice Smith
+Email: alice.smith@example.com
+Phone: +1234567890
+Skills: Python, SQL, FastAPI, Docker, Git
+Experience: 3 years of experience
+Education: Bachelor of Engineering
+Location: Bangalore
+Expected CTC: 15 LPA
+Notice Period: 30 days

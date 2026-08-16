@@ -10,7 +10,7 @@ from app.logging_config import setup_logging
 import random
 from app.models import User, Candidate
 from app.auth import get_password_hash
-from app.routes import auth, jobs, candidates, interviews, emails, monitoring, ai, tools
+from app.routes import auth, jobs, candidates, interviews, emails, monitoring, ai, tools, extended_api
 
 # Initialize logging configuration
 setup_logging()
@@ -190,6 +190,7 @@ app.include_router(emails.router)
 app.include_router(monitoring.router)
 app.include_router(ai.router)
 app.include_router(tools.router)
+app.include_router(extended_api.router)
 
 @app.get("/")
 def home():

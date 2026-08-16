@@ -392,3 +392,104 @@ class FeedbackAnalysisResponse(BaseModel):
     positive_points: List[str]
     concerns: List[str]
     overall_feedback: str
+
+
+# --- Candidate Sourcing Schemas ---
+class CandidateSourceCreate(BaseModel):
+    source_name: str
+    source_type: str
+    external_candidate_id: Optional[str] = None
+    sourcing_payload: Optional[dict] = None
+
+class CandidateSourceImportRequest(BaseModel):
+    candidate: CandidateCreate
+    source: CandidateSourceCreate
+    job_id: Optional[int] = None
+
+class CandidateImportBulkRequest(BaseModel):
+    imports: List[CandidateSourceImportRequest]
+
+class SourcingSummaryResponse(BaseModel):
+    source_name: str
+    candidate_count: int
+
+# --- Collaboration Schemas ---
+class RecruiterCommentCreate(BaseModel):
+    comment: str
+
+class RecruiterCommentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    comment: str
+    author: str
+    created_at: datetime
+
+class CandidateAssignRequest(BaseModel):
+    assigned_to: str
+    status: Optional[str] = None
+
+class CandidateActivityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    activity_type: str
+    description: str
+    created_by: Optional[str] = None
+    created_at: datetime
+
+# --- Reference & Verification Schemas ---
+class ReferenceCheckCreate(BaseModel):
+    referee_name: str
+    referee_contact: Optional[str] = None
+    referee_relationship: Optional[str] = None
+    comments: Optional[str] = None
+    status: Optional[str] = "Pending"
+
+class ReferenceCheckResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    referee_name: str
+    referee_contact: Optional[str] = None
+    referee_relationship: Optional[str] = None
+    status: str
+    comments: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    created_at: datetime
+
+class VerificationCreate(BaseModel):
+    verification_type: str
+    agency: Optional[str] = None
+    details: Optional[str] = None
+    status: Optional[str] = "Pending"
+
+class VerificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    verification_type: str
+    status: str
+    agency: Optional[str] = None
+    details: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+# --- Prediction Schemas ---
+class PredictionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    predicted_status: str
+    probability: float
+    explanation: Optional[str] = None
+    model_version: str
+    created_at: datetime
+
+class PredictionsReportSummary(BaseModel):
+    total_predictions: int
+    predicted_selected_count: int
+    predicted_rejected_count: int
+    predicted_interview_count: int
+    average_probability: float
+    predictions: List[PredictionResponse]
