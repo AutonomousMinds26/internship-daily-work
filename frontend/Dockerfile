@@ -1,9 +1,9 @@
 # Stage 1: Build React/Vite application
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ .
 
 # Build-time env vars injected by Railway / CI
 ARG VITE_API_BASE_URL
@@ -15,10 +15,10 @@ RUN npm run build
 
 # Stage 2: Serve with Nginx (Railway-compatible)
 FROM nginx:alpine
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash gettext
 
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Railway sets $PORT dynamically; envsubst fills it in at container start
 ENV PORT=80
