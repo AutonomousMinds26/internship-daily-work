@@ -10,14 +10,28 @@ A production-grade, AI-powered recruitment platform covering the complete hiring
 
 ---
 
-## 🌐 Live Production Demo
+## 🌐 Live Production Demo & How to Try
 
-The platform is deployed and running live on **Railway**:
+Experience the live application deployed on **Railway**:
 
-- **🚀 Live Application**: [https://recruiterai-frontend-production.up.railway.app/](https://recruiterai-frontend-production.up.railway.app/)
-- **🔑 Demo Credentials**:
-  - **Admin User**: `admin_user` / `admin_password` (Full access to Admin Console, System Status, Audit Logs, User Management)
-  - **Recruiter User**: `recruiter_user` / `recruiter_password` (Candidate Sourcing, Scoring, Pipeline Kanban, Assessments, Offers)
+👉 **[Launch RecruiterAI Live Demo](https://recruiterai-frontend-production.up.railway.app/)**
+
+### 🔑 Instant Login Credentials
+
+| Role | Username | Password | Access Level |
+|------|----------|----------|--------------|
+| **Administrator** | `admin_user` | `admin_password` | Full system control, Admin Console, RBAC user provisioning, audit logs & microservice health status |
+| **Recruiter** | `recruiter_user` | `recruiter_password` | Kanban pipeline, candidate ATS scoring, AI summaries, technical assessments & offer generation |
+
+---
+
+### 🧪 5 Things to Try on the Live Demo
+
+1. **Kanban Pipeline Board**: Drag-and-drop candidates across hiring stages (*Applied* → *Screening* → *Assessment* → *Interview* → *Offer* → *Hired*).
+2. **11-Point AI Candidate Scoring**: Click any candidate card to inspect the multidimensional score breakdown, skill matching matrix, ATS keyword analysis, and LLM-generated executive summary.
+3. **Sandboxed Code Assessments**: View candidate coding evaluations with automated test runner outputs and grading.
+4. **Offer Generation & DSAR Privacy**: Generate candidate offer letters and test GDPR / Indian DPDP candidate data export & erasure compliance.
+5. **Admin Console & Audit Trail**: Switch to the Admin view to inspect real-time service status, system logs, and security controls.
 
 ---
 
