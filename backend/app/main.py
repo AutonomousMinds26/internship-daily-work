@@ -10,7 +10,10 @@ from app.logging_config import setup_logging
 import random
 from app.models import User, Candidate
 from app.auth import get_password_hash
-from app.routes import auth, jobs, candidates, interviews, emails, monitoring, ai, tools, extended_api
+from app.routes import (
+    auth, jobs, candidates, interviews, emails, monitoring, ai, tools,
+    extended_api, admin, offers, privacy, websockets
+)
 
 # Initialize logging configuration
 setup_logging()
@@ -24,7 +27,8 @@ def seed_users():
             ("admin_user", "Admin"),
             ("recruiter_user", "Recruiter"),
             ("manager_user", "Hiring Manager"),
-            ("alice.smith@example.com", "Candidate")
+            ("alice.smith@example.com", "Candidate"),
+            ("candidate_user", "Candidate"),
         ]
         for username, role in users:
             existing_user = db.query(User).filter(User.username == username).first()
@@ -151,8 +155,8 @@ import redis
 
 app = FastAPI(
     title="RecruiterAI API",
-    description="Backend API for candidate resumes, jobs screening, interview scheduling, and candidate status management.",
-    version="1.0.0",
+    description="Enterprise Multi-tenant ATS & Autonomous AI Talent Acquisition Platform.",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -180,15 +184,13 @@ async def redis_exception_handler(request: Request, exc: redis.exceptions.RedisE
         content={"detail": "Cache service error. Please try again."}
     )
 
-# Custom HTTP Middleware for detailed request logging and error handling
+# Custom HTTP Middleware for detailed request logging and audit tracking
 @app.middleware("http")
 async def log_requests_and_handle_errors(request: Request, call_next):
     start_time = time.time()
-    
-    # Log incoming request
     client_host = request.client.host if request.client else "unknown"
     logger.info(f"Incoming request: {request.method} {request.url.path} from {client_host}")
-    
+
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
@@ -201,7 +203,7 @@ async def log_requests_and_handle_errors(request: Request, call_next):
         process_time = (time.time() - start_time) * 1000
         logger.error(
             f"Unhandled exception during {request.method} {request.url.path} - "
-            f"Error: {str(e)} - Elapsed time: {process_time:.2f}ms", 
+            f"Error: {str(e)} - Elapsed time: {process_time:.2f}ms",
             exc_info=True
         )
         return JSONResponse(
@@ -219,7 +221,17 @@ app.include_router(monitoring.router)
 app.include_router(ai.router)
 app.include_router(tools.router)
 app.include_router(extended_api.router)
+app.include_router(admin.router)
+app.include_router(offers.router)
+app.include_router(privacy.router)
+app.include_router(websockets.router)
 
 @app.get("/")
 def home():
-    return {"status": "healthy", "service": "RecruiterAI API", "version": "1.0.0"}
+    return {
+        "status": "healthy",
+        "service": "RecruiterAI Enterprise API",
+        "version": "2.0.0",
+        "track": "Track B Complete"
+    }
+

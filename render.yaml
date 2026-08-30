@@ -1,0 +1,50 @@
+services:
+  # FastAPI Web Service
+  - type: web
+    name: recruiterai-backend
+    env: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recruiterai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: recruiterai-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: USE_MOCK_APIS
+        value: "true"
+
+  # Celery Background Worker Service
+  - type: worker
+    name: recruiterai-celery-worker
+    env: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && celery -A app.tasks.celery_app worker --loglevel=info"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recruiterai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: recruiterai-redis
+          property: connectionString
+      - key: USE_MOCK_APIS
+        value: "true"
+
+  # Redis Service
+  - type: redis
+    name: recruiterai-redis
+    ipAllowList: []
+    plan: free
+
+databases:
+  - name: recruiterai-db
+    plan: free

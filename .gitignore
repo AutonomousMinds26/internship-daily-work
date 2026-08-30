@@ -1,6 +1,7 @@
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
 
 # Database files
 *.db
@@ -8,7 +9,6 @@ __pycache__/
 
 # Application logs
 *.log
-
 
 # Environment configuration
 .env
@@ -18,3 +18,17 @@ __pycache__/
 venv/
 .venv/
 env/
+
+# Uploaded resume files (runtime data)
+backend/secure_resumes/
+
+# Build artifacts
+frontend/dist/
+frontend/node_modules/
+
+# Graphify analysis cache
+graphify-out/
+
+# OS files
+.DS_Store
+

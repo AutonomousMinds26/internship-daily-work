@@ -9,6 +9,7 @@ from app.main import app
 from app.auth import get_password_hash
 from app.models import User, Candidate, Job
 import app.services.redis_cache as redis_cache
+import app.tasks.recruitment_tasks as recruitment_tasks
 
 # Mock Redis class
 class MockRedis:
@@ -44,6 +45,7 @@ def db():
     """Create a clean database session for each test function."""
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
+    recruitment_tasks.SessionLocal = TestingSessionLocal
     
     # Seed default users
     users = [
@@ -56,9 +58,34 @@ def db():
         user = User(
             username=username,
             password_hash=password_hash,
-            role=role
+            role=role,
+            is_active=True
         )
         session.add(user)
+
+    # Seed default Job & Candidate for test cases
+    job = Job(
+        title="Senior Python Engineer",
+        description="Backend API Development with FastAPI and PostgreSQL",
+        requirements=["Python", "FastAPI", "SQL"],
+        experience_required=3,
+        min_salary=1800000.0,
+        max_salary=2500000.0,
+        salary_currency="INR"
+    )
+    session.add(job)
+
+    candidate = Candidate(
+        name="Vikram Seth",
+        email="vikram.seth@example.com",
+        phone="9111111111",
+        education="B.Tech Computer Science",
+        experience=4,
+        skills=["Python", "FastAPI", "SQL", "Docker"],
+        location="Bangalore",
+        status="Applied"
+    )
+    session.add(candidate)
     session.commit()
 
     yield session

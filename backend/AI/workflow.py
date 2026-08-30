@@ -539,3 +539,28 @@ def run_recruitment_pipeline(
         "db": db
     }
     return app_graph.invoke(inputs)
+
+
+def run_lifecycle_recruitment_graph(
+    candidate_id: int,
+    job_id: int,
+    candidate_data: Dict[str, Any],
+    job_data: Dict[str, Any],
+    assessment_provider: str = "HackerRank"
+) -> Dict[str, Any]:
+    """
+    Executes the multi-stage LangGraph recruitment lifecycle workflow:
+    Matching -> Screening -> Assessment -> Interview Coordination -> Feedback -> Verification -> Offer.
+    """
+    from AI.recruitment_graph import recruitment_graph_runner, RecruitmentState
+
+    state: RecruitmentState = {
+        "candidate_id": candidate_id,
+        "job_id": job_id,
+        "candidate_data": candidate_data,
+        "job_data": job_data,
+        "assessment_provider": assessment_provider,
+        "audit_trail": []
+    }
+    return recruitment_graph_runner.execute(state)
+

@@ -7,8 +7,80 @@ from app.models import Candidate, Job, CandidateSource, CandidateActivity
 from app.services.duplicates import check_duplicate_candidate
 from app.services import ai_pipeline
 from AI.ats_analyzer import analyze_ats
+from AI.scorer import calculate_enhanced_score
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_ats_and_match(candidate_data: Dict[str, Any], job_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Computes ATS score, 11-point match score, screening score, and composite score.
+    """
+    cand_skills = candidate_data.get("skills", [])
+    if isinstance(cand_skills, str):
+        cand_skills = [s.strip() for s in cand_skills.split(",") if s.strip()]
+
+    job_reqs = job_data.get("required_skills", []) or job_data.get("requirements", [])
+    if isinstance(job_reqs, str):
+        job_reqs = [s.strip() for s in job_reqs.split(",") if s.strip()]
+
+    # Run ATS Analyzer
+    cand_dict_ats = {
+        "name": candidate_data.get("name", ""),
+        "email": candidate_data.get("email", ""),
+        "phone": candidate_data.get("phone", ""),
+        "skills": cand_skills,
+        "experience": candidate_data.get("experience", 0),
+        "education": candidate_data.get("education", ""),
+        "projects": candidate_data.get("projects", []),
+        "resume_text": candidate_data.get("resume_text", "")
+    }
+    job_info_ats = {
+        "job_title": job_data.get("title", "Software Engineer"),
+        "required_skills": job_reqs,
+        "experience": f"{job_data.get('experience', 0)} years",
+        "location": job_data.get("location", ""),
+        "salary_range": "",
+        "notice_period": ""
+    }
+
+    try:
+        ats_res = analyze_ats(cand_dict_ats, job_info_ats)
+        ats_score = float(ats_res.get("ats_score", 70.0))
+    except Exception:
+        ats_res = {}
+        ats_score = 70.0
+
+    # Run 11-point enhanced scorer
+    try:
+        score_res = calculate_enhanced_score(cand_dict_ats, job_info_ats)
+        match_score = float(score_res.get("total_score", score_res.get("score", 70.0)))
+    except Exception:
+        match_score = 70.0
+
+    cand_skills_norm = {s.lower().strip() for s in cand_skills}
+    job_skills_norm = {s.lower().strip() for s in job_reqs}
+    matched_skills = list(cand_skills_norm & job_skills_norm)
+    missing_skills = list(job_skills_norm - cand_skills_norm)
+
+    screening_score = round(0.5 * ats_score + 0.5 * match_score, 2)
+    final_score = round((0.3 * ats_score) + (0.5 * match_score) + (0.2 * screening_score), 2)
+
+    cand_exp = candidate_data.get("experience", 0)
+    job_exp = job_data.get("experience", 0)
+    exp_gap = max(0, int(job_exp or 0) - int(cand_exp or 0))
+
+    return {
+        "ats_score": ats_score,
+        "match_score": match_score,
+        "screening_score": screening_score,
+        "final_score": final_score,
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills,
+        "experience_gap": exp_gap,
+        "ats_details": ats_res
+    }
+
 
 def import_candidate_from_source(
     candidate_data: Dict[str, Any],
@@ -78,7 +150,7 @@ def import_candidate_from_source(
     exp_val = candidate_data.get("experience", 0)
     try:
         experience_years = int(exp_val)
-    except ValueError:
+    except (ValueError, TypeError):
         import re
         match = re.search(r'(\d+)', str(exp_val))
         experience_years = int(match.group(1)) if match else 0

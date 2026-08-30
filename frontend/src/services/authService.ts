@@ -1,6 +1,14 @@
 import { api } from './api';
 import { User, UserRole } from '../types';
 
+export interface RegisterPayload {
+  username: string;
+  password: string;
+  role: UserRole;
+  full_name?: string;
+  email?: string;
+}
+
 export const authService = {
   async login(username: string, password = 'password123'): Promise<User> {
     const formData = new FormData();
@@ -12,6 +20,27 @@ export const authService = {
     });
 
     const { access_token, role } = response.data;
+    localStorage.setItem('recruiter_jwt_token', access_token);
+    localStorage.setItem('recruiter_user_role', role);
+    localStorage.setItem('recruiter_username', username);
+
+    return {
+      username,
+      role: role as UserRole,
+      token: access_token
+    };
+  },
+
+  async register(payload: RegisterPayload): Promise<User> {
+    const response = await api.post('/auth/register', {
+      username: payload.username,
+      password: payload.password,
+      role: payload.role,
+      full_name: payload.full_name || undefined,
+      email: payload.email || undefined
+    });
+
+    const { access_token, role, username } = response.data;
     localStorage.setItem('recruiter_jwt_token', access_token);
     localStorage.setItem('recruiter_user_role', role);
     localStorage.setItem('recruiter_username', username);

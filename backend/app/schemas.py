@@ -597,3 +597,187 @@ class PredictionsReportSummary(BaseModel):
     predicted_interview_count: int
     average_probability: float
     predictions: List[PredictionResponse]
+
+
+# --- Admin & User Management Schemas ---
+class UserAdminCreate(BaseModel):
+    username: str
+    password: str
+    role: str = Field(..., description="Recruiter, Hiring Manager, Admin, Candidate")
+    organization_id: Optional[int] = None
+    hiring_team_id: Optional[int] = None
+    email: Optional[EmailStr] = None
+
+class UserRoleUpdate(BaseModel):
+    role: str = Field(..., description="Recruiter, Hiring Manager, Admin, Candidate")
+    is_active: Optional[bool] = None
+    hiring_team_id: Optional[int] = None
+
+class UserAdminResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    email: Optional[str] = None
+    role: str
+    is_active: bool = True
+    organization_id: Optional[int] = None
+    hiring_team_id: Optional[int] = None
+    last_login: Optional[datetime] = None
+    created_at: datetime
+
+
+# --- Organization & Hiring Team Schemas ---
+class OrganizationCreate(BaseModel):
+    name: str
+    slug: str
+    domain: Optional[str] = None
+    settings: Optional[dict] = {}
+
+class OrganizationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    slug: str
+    domain: Optional[str] = None
+    settings: Optional[dict] = {}
+    is_active: bool
+    created_at: datetime
+
+class HiringTeamCreate(BaseModel):
+    organization_id: Optional[int] = None
+    name: str
+    department: str
+    lead_user_id: Optional[int] = None
+
+class HiringTeamResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    organization_id: Optional[int] = None
+    name: str
+    department: str
+    lead_user_id: Optional[int] = None
+    created_at: datetime
+
+
+# --- Compensation & Offer Management Schemas ---
+class OfferCreate(BaseModel):
+    candidate_id: int
+    job_id: int
+    base_salary: float
+    bonus: float = 0.0
+    stock_grant: float = 0.0
+    currency: str = "INR"
+    expiration_date: Optional[datetime] = None
+    offer_letter_text: Optional[str] = None
+
+class OfferUpdate(BaseModel):
+    base_salary: Optional[float] = None
+    bonus: Optional[float] = None
+    stock_grant: Optional[float] = None
+    currency: Optional[str] = None
+    status: Optional[str] = None # Draft, Sent, Accepted, Rejected, Expired
+    expiration_date: Optional[datetime] = None
+    offer_letter_text: Optional[str] = None
+
+class OfferResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    job_id: int
+    base_salary: float
+    bonus: float
+    stock_grant: float
+    currency: str
+    status: str
+    offer_letter_text: Optional[str] = None
+    expiration_date: Optional[datetime] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+# --- Sandboxed Code Execution & Testing Schemas ---
+class CodeRunRequest(BaseModel):
+    candidate_id: Optional[int] = None
+    assessment_id: Optional[int] = None
+    language: str = "python" # python, javascript, java, cpp, sql
+    code: str
+    test_cases: List[dict] = [] # [{"input": "...", "expected": "..."}]
+
+class TestCaseResult(BaseModel):
+    test_index: int
+    input: str
+    expected_output: str
+    actual_output: str
+    passed: bool
+    execution_time_ms: float
+
+class CodeRunResponse(BaseModel):
+    success: bool
+    language: str
+    score: float
+    passed_tests: int
+    total_tests: int
+    execution_time_ms: float
+    test_results: List[TestCaseResult]
+    error_output: Optional[str] = None
+
+
+# --- Audit Logging & System Status Schemas ---
+class AuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    action: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    details: Optional[dict] = {}
+    timestamp: datetime
+
+class IntegrationConfigCreate(BaseModel):
+    provider_name: str
+    provider_category: str
+    is_enabled: bool = False
+    config_data: Optional[dict] = {}
+
+class IntegrationConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    provider_name: str
+    provider_category: str
+    is_enabled: bool
+    config_data: Optional[dict] = {}
+    last_sync_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+# --- GDPR / Indian DPDP Privacy Schemas ---
+class CandidateConsentCreate(BaseModel):
+    candidate_id: int
+    consent_type: str # resume_processing, background_verification, communication
+    granted: bool = True
+    terms_version: str = "1.0"
+
+class CandidateConsentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    candidate_id: int
+    consent_type: str
+    granted: bool
+    terms_version: str
+    timestamp: datetime
+
+class CandidateGDPRExportResponse(BaseModel):
+    candidate_id: int
+    exported_at: datetime
+    profile: dict
+    applications: List[dict]
+    resumes: List[dict]
+    assessments: List[dict]
+    interviews: List[dict]
+    offers: List[dict]
+    activities: List[dict]
+    consents: List[dict]
+

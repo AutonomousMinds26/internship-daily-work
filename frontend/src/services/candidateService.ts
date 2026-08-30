@@ -1,5 +1,5 @@
 import { api } from './api';
-import { Candidate, CandidateHistoryItem, CandidateStatus } from '../types';
+import type { Candidate, CandidateHistoryItem, CandidateStatus } from '../types';
 
 export const candidateService = {
   async getCandidates(params?: { skip?: number; limit?: number; status?: string; search?: string }): Promise<Candidate[]> {
@@ -28,7 +28,7 @@ export const candidateService = {
   },
 
   async updateFeedback(id: number, feedback: string): Promise<Candidate> {
-    const response = await api.patch(`/candidates/${id}/feedback`, { feedback });
+    const response = await api.patch(`/candidates/${id}/feedback`, null, { params: { feedback } });
     return response.data;
   },
 
@@ -47,8 +47,9 @@ export const candidateService = {
   },
 
   async getCandidateHistory(id: number): Promise<CandidateHistoryItem[]> {
+    // Actual endpoint: /candidates/{candidate_id}/history
     const response = await api.get(`/candidates/${id}/history`);
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   async compareCandidates(candidateIds: number[]): Promise<any[]> {

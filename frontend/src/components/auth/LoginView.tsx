@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Sparkles, Shield, UserCheck, Briefcase, Lock, ArrowRight } from 'lucide-react';
+import { Sparkles, Shield, UserCheck, Briefcase, Lock, ArrowRight, UserPlus } from 'lucide-react';
 import { UserRole, User } from '../../types';
 import { authService } from '../../services/authService';
 import { useToast } from '../layout/Toast';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
+  onNavigateToRegister?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigateToRegister }) => {
   const [username, setUsername] = useState('recruiter_user');
   const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
@@ -204,7 +205,38 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <p style={{ fontSize: '11px', color: '#64748B', marginTop: '20px' }}>
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0 16px' }}>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(51,65,85,0.5)' }} />
+          <span style={{ fontSize: '12px', color: '#475569' }}>New to RecruiterAI?</span>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(51,65,85,0.5)' }} />
+        </div>
+
+        {/* Register link */}
+        <button
+          type="button"
+          onClick={onNavigateToRegister}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '10px',
+            border: '1px solid rgba(6,182,212,0.3)',
+            background: 'rgba(6,182,212,0.08)',
+            color: '#22D3EE',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <UserPlus size={16} />
+          Create New Account
+        </button>
+
+        <p style={{ fontSize: '11px', color: '#64748B', marginTop: '16px' }}>
           Pre-seeded credentials: password123 across all roles.
         </p>
       </div>

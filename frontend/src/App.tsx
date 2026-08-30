@@ -3,6 +3,7 @@ import { ToastProvider, useToast } from './components/layout/Toast';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { LoginView } from './components/auth/LoginView';
+import { RegisterView } from './components/auth/RegisterView';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
 import { KanbanBoard } from './components/pipeline/KanbanBoard';
 import { CandidateListView } from './components/candidates/CandidateListView';
@@ -15,14 +16,17 @@ import { SkillGapView } from './components/skillgap/SkillGapView';
 import { InterviewCalendar } from './components/interviews/InterviewCalendar';
 import { EmailTemplateSender } from './components/communication/EmailTemplateSender';
 import { DiversityAnalyticsView } from './components/analytics/DiversityAnalyticsView';
+import { AdminConsole } from './components/admin/AdminConsole';
 
 import { User, Candidate, Job, CandidateStatus } from './types';
 import { authService } from './services/authService';
 import { candidateService } from './services/candidateService';
 import { jobService } from './services/jobService';
+import { realtimeService } from './services/websocketService';
 
 const MainApp: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(authService.getCurrentUser());
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -51,6 +55,25 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       loadCoreData();
+      realtimeService.connect();
+
+      const unsubscribe = realtimeService.subscribe((event) => {
+        if (event.type === 'STATUS_UPDATE') {
+          showToast(`Live update: Candidate #${event.payload?.candidate_id} status changed to ${event.payload?.status}`, 'info');
+          setCandidates((prev) =>
+            prev.map((c) =>
+              c.id === event.payload?.candidate_id ? { ...c, status: event.payload?.status } : c
+            )
+          );
+        } else if (event.type === 'OFFER_EXTENDED') {
+          showToast(`Live event: Offer extended to ${event.payload?.candidate_name || 'Candidate'}`, 'success');
+        }
+      });
+
+      return () => {
+        unsubscribe();
+        realtimeService.disconnect();
+      };
     }
   }, [currentUser]);
 
@@ -67,6 +90,7 @@ const MainApp: React.FC = () => {
       if (selectedCandidate && selectedCandidate.id === candidateId) {
         setSelectedCandidate({ ...selectedCandidate, status: newStatus });
       }
+      realtimeService.send('STATUS_UPDATE', { candidate_id: candidateId, status: newStatus }, currentUser?.username);
       showToast(`Candidate status updated to ${newStatus}`, 'success');
     } catch (e: any) {
       showToast('Failed to update candidate status.', 'error');
@@ -88,7 +112,20 @@ const MainApp: React.FC = () => {
   };
 
   if (!currentUser) {
-    return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
+    if (authView === 'register') {
+      return (
+        <RegisterView
+          onRegisterSuccess={(u) => { setCurrentUser(u); showToast(`Welcome to RecruiterAI, ${u.username}!`, 'success'); }}
+          onBackToLogin={() => setAuthView('login')}
+        />
+      );
+    }
+    return (
+      <LoginView
+        onLoginSuccess={(u) => setCurrentUser(u)}
+        onNavigateToRegister={() => setAuthView('register')}
+      />
+    );
   }
 
   const getPageTitle = () => {
@@ -104,6 +141,7 @@ const MainApp: React.FC = () => {
       case 'interviews': return { title: 'Interview Coordinator', sub: 'Schedule slots and manage calendar invites' };
       case 'communication': return { title: 'Candidate Outreach', sub: 'Templated automated emails and notices' };
       case 'analytics': return { title: 'Analytics & Diversity Audit', sub: 'Macro statistics and bias-free compliance verification' };
+      case 'admin': return { title: 'Administration & Control Center', sub: 'RBAC, system health, integrations & audit logs' };
       default: return { title: 'RecruiterAI Portal', sub: '' };
     }
   };
@@ -219,6 +257,10 @@ const MainApp: React.FC = () => {
             <DiversityAnalyticsView
               candidates={candidates}
             />
+          )}
+
+          {currentTab === 'admin' && (
+            <AdminConsole />
           )}
         </main>
       </div>

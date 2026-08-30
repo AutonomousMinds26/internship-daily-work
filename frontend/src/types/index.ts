@@ -179,3 +179,75 @@ export interface EmailTemplate {
   subject: string;
   body: string;
 }
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email?: string;
+  role: UserRole;
+  is_active: boolean;
+  organization_id?: number;
+  hiring_team_id?: number;
+  last_login?: string;
+  created_at: string;
+}
+
+export interface IntegrationConfigItem {
+  id: number;
+  provider_name: string;
+  provider_category: string;
+  is_enabled: boolean;
+  config_data?: any;
+  last_sync_at?: string;
+}
+
+export interface AuditLogItem {
+  id: number;
+  user_id?: number;
+  username?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  details?: any;
+  timestamp: string;
+}
+
+export interface OfferItem {
+  id: number;
+  candidate_id: number;
+  job_id: number;
+  base_salary: number;
+  bonus: number;
+  stock_grant: number;
+  currency: string;
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Expired';
+  offer_letter_text?: string;
+  expiration_date?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export interface SystemStatusItem {
+  status: string;
+  timestamp: string;
+  environment: string;
+  database: {
+    status: string;
+    type: string;
+    counts: {
+      users: number;
+      candidates: number;
+      jobs: number;
+      offers: number;
+    };
+  };
+  background_worker: {
+    broker: string;
+    status: string;
+  };
+  llm_provider: {
+    active_provider: string;
+  };
+  integrations_mode: string;
+}
+

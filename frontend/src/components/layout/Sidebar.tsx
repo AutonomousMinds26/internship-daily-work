@@ -43,8 +43,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'skillgap', label: 'Skill-Gap Analysis', icon: GraduationCap },
     { id: 'interviews', label: 'Interview Scheduling', icon: CalendarCheck },
     { id: 'communication', label: 'Communication', icon: Mail },
-    { id: 'analytics', label: 'Diversity & Reports', icon: PieChart }
+    { id: 'analytics', label: 'Diversity & Reports', icon: PieChart },
+    ...(userRole === 'Admin' ? [{ id: 'admin', label: 'Admin Console', icon: ShieldCheck, badge: 'Admin' }] : [])
   ];
+
 
   return (
     <aside style={{

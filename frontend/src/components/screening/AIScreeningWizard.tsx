@@ -29,7 +29,17 @@ export const AIScreeningWizard: React.FC<AIScreeningWizardProps> = ({
     setLoading(true);
     try {
       const res = await aiService.getScreeningQuestions(selectedCandId, selectedJobId);
-      const qList = res.all_questions || [
+      // API returns categorized: { technical_questions, experience_questions, availability_questions, ... }
+      const allQ: string[] = [
+        ...(res.technical_questions || []),
+        ...(res.experience_questions || []),
+        ...(res.availability_questions || []),
+        ...(res.salary_questions || []),
+        ...(res.location_questions || []),
+        ...(res.all_questions || [])
+      ].filter((q: string, i: number, arr: string[]) => arr.indexOf(q) === i); // dedupe
+
+      const qList = allQ.length > 0 ? allQ : [
         `Can you describe your hands-on experience working with ${selectedCand?.skills?.[0] || 'Python'}?`,
         `How many years of professional backend engineering experience do you possess?`,
         `What is your official notice period and earliest joining date?`,
@@ -72,7 +82,7 @@ export const AIScreeningWizard: React.FC<AIScreeningWizardProps> = ({
   const handleEvaluateAnswers = async () => {
     setLoading(true);
     try {
-      const result = await aiService.evaluateScreeningAnswers(selectedCandId, answers);
+      const result = await aiService.evaluateScreeningAnswers(selectedCandId, answers, questions);
       setEvaluationResult(result);
       setStep('results');
       showToast(`Evaluation completed! Score: ${result.screening_score}%`, 'success');
