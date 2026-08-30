@@ -4,11 +4,24 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+# Build-time env vars injected by Railway / CI
+ARG VITE_API_BASE_URL
+ARG VITE_BASE_PATH=/
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+
 RUN npm run build
 
-# Stage 2: Serve with Nginx
+# Stage 2: Serve with Nginx (Railway-compatible)
 FROM nginx:alpine
+RUN apk add --no-cache bash
+
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+
+# Railway sets $PORT dynamically; envsubst fills it in at container start
+ENV PORT=80
+EXPOSE $PORT
+
+CMD ["/bin/sh", "-c", "envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
