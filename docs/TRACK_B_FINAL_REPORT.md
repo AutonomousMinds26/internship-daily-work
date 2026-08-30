@@ -11,6 +11,9 @@
 
 RecruiterAI is a production-grade, AI-powered talent acquisition platform built as part of the Track B internship challenge. The platform implements the complete end-to-end recruitment lifecycle — from resume ingestion and AI scoring through to offer management and GDPR-compliant data governance.
 
+- **Live Demo**: [https://recruiterai-frontend-production.up.railway.app/](https://recruiterai-frontend-production.up.railway.app/)
+- **Default Credentials**: `admin_user` / `admin_password` (Admin), `recruiter_user` / `recruiter_password` (Recruiter)
+
 **✅ All 50 Track B requirements have been implemented and verified.**
 
 ---

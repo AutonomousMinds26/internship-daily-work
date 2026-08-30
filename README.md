@@ -1,11 +1,23 @@
 # RecruiterAI — AI-Powered Talent Acquisition Platform
 
 [![CI/CD](https://github.com/AutonomousMinds26/internship-daily-work/actions/workflows/ci.yml/badge.svg)](https://github.com/AutonomousMinds26/internship-daily-work/actions)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Railway-0B0D0E?style=flat&logo=railway)](https://recruiterai-frontend-production.up.railway.app/)
 [![Tests](https://img.shields.io/badge/tests-95%20passed-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11+-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
-A production-grade, AI-powered recruitment platform covering the complete hiring lifecycle — from resume ingestion and 11-point AI scoring through to offer management and GDPR-compliant data governance.
+A production-grade, AI-powered recruitment platform covering the complete hiring lifecycle — from resume ingestion and 11-point AI scoring through to offer management, candidate assessments, and GDPR-compliant data governance.
+
+---
+
+## 🌐 Live Production Demo
+
+The platform is deployed and running live on **Railway**:
+
+- **🚀 Live Application**: [https://recruiterai-frontend-production.up.railway.app/](https://recruiterai-frontend-production.up.railway.app/)
+- **🔑 Demo Credentials**:
+  - **Admin User**: `admin_user` / `admin_password` (Full access to Admin Console, System Status, Audit Logs, User Management)
+  - **Recruiter User**: `recruiter_user` / `recruiter_password` (Candidate Sourcing, Scoring, Pipeline Kanban, Assessments, Offers)
 
 ---
 
@@ -62,7 +74,22 @@ The first startup seeds default admin and test users:
 
 ---
 
-## Docker Compose
+## Deployment Options
+
+### 1. Railway One-Shot Deploy (Recommended for Cloud)
+
+Deploy backend, frontend, PostgreSQL, and Redis to Railway using the automated script:
+
+```bash
+# Obtain your token from https://railway.com/account/tokens
+export RAILWAY_TOKEN="your_railway_token"
+
+# Run automated provision & deploy
+chmod +x deploy_railway.sh
+./deploy_railway.sh
+```
+
+### 2. Docker Compose (Local Multi-Container)
 
 ```bash
 docker compose up -d
