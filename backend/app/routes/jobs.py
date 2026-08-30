@@ -28,7 +28,6 @@ def serialize_job(j: Job) -> dict:
         "created_at": j.created_at.isoformat() if j.created_at is not None else None
     }
 
-@router.post("/job", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     job_in: JobCreate,
@@ -54,7 +53,6 @@ def create_job(
     return db_job
 
 
-@router.get("/job", response_model=List[JobResponse])
 @router.get("/jobs", response_model=List[JobResponse])
 def get_jobs(
     db: Session = Depends(get_db),
@@ -68,7 +66,6 @@ def get_jobs(
     return jobs
 
 
-@router.get("/job/{job_id}", response_model=JobResponse)
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 def get_job_by_id(
     job_id: int,

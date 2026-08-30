@@ -36,7 +36,7 @@ def test_create_job_rbac(client):
 
     # Hiring Manager should not be able to create a job
     response = client.post(
-        "/job",
+        "/jobs",
         json=job_data,
         headers={"Authorization": f"Bearer {manager_token}"}
     )
@@ -44,7 +44,7 @@ def test_create_job_rbac(client):
 
     # Recruiter should be able to create a job
     response = client.post(
-        "/job",
+        "/jobs",
         json=job_data,
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
@@ -127,7 +127,7 @@ def test_get_candidate_caching(client, mock_redis):
 
     # 2. Get candidate - should hit database, then populate cache (Cache Miss)
     get_res = client.get(
-        f"/candidate?id={candidate_id}",
+        f"/candidates?id={candidate_id}",
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
     assert get_res.status_code == 200
@@ -143,7 +143,7 @@ def test_get_candidate_caching(client, mock_redis):
     mock_redis.setex(cache_key, 3600, json.dumps(cached_candidate))
 
     get_res_2 = client.get(
-        f"/candidate?id={candidate_id}",
+        f"/candidates?id={candidate_id}",
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
     assert get_res_2.status_code == 200
@@ -155,7 +155,7 @@ def test_get_score_calculation(client):
 
     # 1. Create a job
     job_res = client.post(
-        "/job",
+        "/jobs",
         json={
             "title": "FastAPI Architect",
             "description": "Build high-throughput APIs",
@@ -207,7 +207,7 @@ def test_get_jobs_list(client):
 
     # Create a job
     create_res = client.post(
-        "/job",
+        "/jobs",
         json={
             "title": "Data Scientist",
             "description": "ML solutions",
@@ -220,7 +220,7 @@ def test_get_jobs_list(client):
 
     # Get jobs list as Recruiter
     get_res = client.get(
-        "/job",
+        "/jobs",
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
     assert get_res.status_code == 200
@@ -230,7 +230,7 @@ def test_get_jobs_list(client):
 
     # Get jobs list as Hiring Manager
     get_res_manager = client.get(
-        "/job",
+        "/jobs",
         headers={"Authorization": f"Bearer {manager_token}"}
     )
     assert get_res_manager.status_code == 200
@@ -259,7 +259,7 @@ def test_patch_candidate_status(client, mock_redis):
 
     # 2. Update status to Shortlisted as Hiring Manager
     patch_res = client.patch(
-        f"/candidate/{candidate_id}/status",
+        f"/candidates/{candidate_id}/status",
         json={"status": "Shortlisted"},
         headers={"Authorization": f"Bearer {manager_token}"}
     )
@@ -269,7 +269,7 @@ def test_patch_candidate_status(client, mock_redis):
 
     # 3. Try setting an invalid status
     patch_invalid = client.patch(
-        f"/candidate/{candidate_id}/status",
+        f"/candidates/{candidate_id}/status",
         json={"status": "InvalidStatus"},
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
@@ -277,7 +277,7 @@ def test_patch_candidate_status(client, mock_redis):
 
     # 4. Check candidate endpoint returns updated status (and verify from cache)
     get_res = client.get(
-        f"/candidate?id={candidate_id}",
+        f"/candidates?id={candidate_id}",
         headers={"Authorization": f"Bearer {recruiter_token}"}
     )
     assert get_res.status_code == 200
@@ -379,7 +379,7 @@ def test_interview_management(client):
         "meeting_link": "https://meet.example.com/interview-1"
     }
     sch_res = client.post(
-        "/interview",
+        "/interviews",
         json=interview_payload,
         headers={"Authorization": f"Bearer {token}"}
     )
@@ -393,13 +393,13 @@ def test_interview_management(client):
     assert cand_get.json()["status"] == "Interview Scheduled"
 
     # 2. Get Interviews
-    get_list = client.get("/interview", headers={"Authorization": f"Bearer {token}"})
+    get_list = client.get("/interviews", headers={"Authorization": f"Bearer {token}"})
     assert get_list.status_code == 200
     assert any(i["id"] == interview_id for i in get_list.json())
 
     # 3. Update Interview
     put_res = client.put(
-        f"/interview/{interview_id}",
+        f"/interviews/{interview_id}",
         json={"notes": "Focus on Kubernetes setup"},
         headers={"Authorization": f"Bearer {token}"}
     )
@@ -407,7 +407,7 @@ def test_interview_management(client):
     assert put_res.json()["notes"] == "Focus on Kubernetes setup"
 
     # 4. Cancel/Delete Interview
-    del_res = client.delete(f"/interview/{interview_id}", headers={"Authorization": f"Bearer {token}"})
+    del_res = client.delete(f"/interviews/{interview_id}", headers={"Authorization": f"Bearer {token}"})
     assert del_res.status_code == 200
 
 # --- Email Communication Tests ---

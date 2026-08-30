@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import List, Optional
 from datetime import datetime
+import re
 
 # --- User Schemas ---
 class UserCreate(BaseModel):
@@ -36,6 +37,35 @@ class JobCreate(BaseModel):
     requirements: List[str] = []
     experience_required: int = 0
 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        if not v or len(v.strip()) < 3:
+            raise ValueError("Title must be at least 3 characters long.")
+        return v.strip()
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v: str) -> str:
+        if not v or len(v.strip()) < 5:
+            raise ValueError("Description must be at least 5 characters long.")
+        return v.strip()
+
+    @field_validator("requirements")
+    @classmethod
+    def validate_requirements(cls, v: List[str]) -> List[str]:
+        cleaned = [r.strip() for r in v if r.strip()]
+        if not cleaned:
+            raise ValueError("Requirements list cannot be empty.")
+        return cleaned
+
+    @field_validator("experience_required")
+    @classmethod
+    def validate_experience(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("Required experience must be non-negative.")
+        return v
+
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,6 +90,38 @@ class CandidateCreate(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: Optional[str] = "Applied"
+    feedback: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Name must be at least 2 characters long.")
+        if not re.match(r"^[a-zA-Z\s]+$", v):
+            raise ValueError("Name must contain only letters and spaces.")
+        return v.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not re.match(r"^\+?[\d\s\-]{7,15}$", v):
+            raise ValueError("Phone number must be between 7 and 15 digits (can include optional '+', spaces, or dashes).")
+        return v.strip()
+
+    @field_validator("experience")
+    @classmethod
+    def validate_experience(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("Experience must be non-negative.")
+        return v
+
+    @field_validator("skills")
+    @classmethod
+    def validate_skills(cls, v: List[str]) -> List[str]:
+        cleaned = [s.strip() for s in v if s.strip()]
+        return cleaned
 
 class CandidateUpdate(BaseModel):
     name: Optional[str] = None
@@ -74,6 +136,44 @@ class CandidateUpdate(BaseModel):
     location: Optional[str] = None
     resume_text: Optional[str] = None
     status: Optional[str] = None
+    feedback: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if len(v.strip()) < 2:
+            raise ValueError("Name must be at least 2 characters long.")
+        if not re.match(r"^[a-zA-Z\s]+$", v):
+            raise ValueError("Name must contain only letters and spaces.")
+        return v.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not re.match(r"^\+?[\d\s\-]{7,15}$", v):
+            raise ValueError("Phone number must be between 7 and 15 digits (can include optional '+', spaces, or dashes).")
+        return v.strip()
+
+    @field_validator("experience")
+    @classmethod
+    def validate_experience(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v < 0:
+            raise ValueError("Experience must be non-negative.")
+        return v
+
+    @field_validator("skills")
+    @classmethod
+    def validate_skills(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        cleaned = [s.strip() for s in v if s.strip()]
+        return cleaned
 
 class CandidateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -93,6 +193,7 @@ class CandidateResponse(BaseModel):
     status: str
     created_at: datetime
     ai_summary: Optional[str] = None
+    feedback: Optional[str] = None
     resume_hash: Optional[str] = None
     ats_score: Optional[float] = 0.0
     match_score: Optional[float] = 0.0
@@ -103,6 +204,9 @@ class CandidateResponse(BaseModel):
 
 class CandidateStatusUpdate(BaseModel):
     status: str
+
+class FeedbackUpdate(BaseModel):
+    feedback: str
 
 
 # --- Score/Match Schemas ---

@@ -33,6 +33,7 @@ class Candidate(Base):
 
     # Extended database enhancement fields
     ai_summary = Column(Text, nullable=True)
+    feedback = Column(Text, nullable=True)
     resume_hash = Column(String, unique=True, index=True, nullable=True)
     ats_score = Column(Float, default=0.0)
     match_score = Column(Float, default=0.0)

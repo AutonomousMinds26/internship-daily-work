@@ -1,0 +1,6 @@
+Alice Smith
+Email: alice.smith@example.com
+Skills: Python, SQL
+Experience: 3 years
+Education: B.Tech in CSE
+Location: Pune

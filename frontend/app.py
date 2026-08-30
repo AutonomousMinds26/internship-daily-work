@@ -963,7 +963,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading candidate statistics..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
 
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
         df_c = pd.DataFrame(candidates) if candidates else pd.DataFrame()
@@ -1025,7 +1025,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Fetching pipeline candidates..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
 
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
 
@@ -1080,7 +1080,7 @@ else:
 
                         if new_status != cand.get("status"):
                             with st.spinner("Updating candidate status..."):
-                                up_res = api_request("PATCH", f"/candidate/{cand['id']}/status", json={"status": new_status})
+                                up_res = api_request("PATCH", f"/candidates/{cand['id']}/status", json={"status": new_status})
                                 if up_res and up_res.status_code == 200:
                                     st.toast(f"Status for {cand['name']} updated to {new_status}!", icon="✅")
                                     time.sleep(0.3)
@@ -1097,7 +1097,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading candidate details..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
 
         if not cand_res or cand_res.status_code != 200 or not cand_res.json():
             st.info("No candidates available.")
@@ -1226,7 +1226,7 @@ else:
 
         if st.button("💾 Save Recruiter Feedback", type="primary", width="stretch"):
             with st.spinner("Saving recruiter feedback..."):
-                fb_res = api_request("PATCH", f"/candidate/{cand['id']}/feedback", json={"feedback": new_feedback})
+                fb_res = api_request("PATCH", f"/candidates/{cand['id']}/feedback", json={"feedback": new_feedback})
                 if fb_res and fb_res.status_code == 200:
                     st.toast("Recruiter feedback saved successfully!", icon="🎉")
                     time.sleep(0.3)
@@ -1407,7 +1407,7 @@ else:
             if new_quick_status != curr_status:
                 if st.button(f"✅ Update to {new_quick_status}", key=f"quick_update_{cand['id']}", type="primary"):
                     with st.spinner("Updating status..."):
-                        up_res = api_request("PATCH", f"/candidate/{cand['id']}/status", json={"status": new_quick_status})
+                        up_res = api_request("PATCH", f"/candidates/{cand['id']}/status", json={"status": new_quick_status})
                         if up_res and up_res.status_code == 200:
                             # Log activity
                             if cand_id_key not in st.session_state.candidate_activity:
@@ -1432,7 +1432,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Generating recruitment reports..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
 
         if not cand_res or cand_res.status_code != 200:
             st.error("Failed to load candidate analytics data.")
@@ -1530,8 +1530,8 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading AI evaluation data..."):
-            job_res = api_request("GET", "/job")
-            cand_res = api_request("GET", "/candidate")
+            job_res = api_request("GET", "/jobs")
+            cand_res = api_request("GET", "/candidates")
 
         if job_res is None or cand_res is None:
             st.stop()
@@ -1729,9 +1729,9 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading dashboard data..."):
-            cand_res = api_request("GET", "/candidate")
-            job_res = api_request("GET", "/job")
-            interview_res = api_request("GET", "/interview")
+            cand_res = api_request("GET", "/candidates")
+            job_res = api_request("GET", "/jobs")
+            interview_res = api_request("GET", "/interviews")
 
         if cand_res is None or job_res is None:
             st.error("Failed to load dashboard data.")
@@ -2031,8 +2031,8 @@ else:
         st.markdown("---")
 
         with st.spinner("Fetching candidate pipeline..."):
-            cand_res = api_request("GET", "/candidate")
-            job_res = api_request("GET", "/job")
+            cand_res = api_request("GET", "/candidates")
+            job_res = api_request("GET", "/jobs")
 
         if cand_res is not None and job_res is not None:
             if cand_res.status_code == 200 and job_res.status_code == 200:
@@ -2167,7 +2167,7 @@ else:
                                         )
                                         if st.button("Update Status", key=f"update_btn_{row['id']}"):
                                             patch_res = api_request(
-                                                "PATCH", f"/candidate/{row['id']}/status",
+                                                "PATCH", f"/candidates/{row['id']}/status",
                                                 json={"status": new_status}
                                             )
                                             if patch_res and patch_res.status_code == 200:
@@ -2314,8 +2314,8 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading candidates..."):
-            cand_res = api_request("GET", "/candidate")
-            job_res = api_request("GET", "/job")
+            cand_res = api_request("GET", "/candidates")
+            job_res = api_request("GET", "/jobs")
 
         if cand_res is None or cand_res.status_code != 200:
             st.error("Failed to load candidates.")
@@ -2488,8 +2488,8 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading jobs and candidates..."):
-            job_res = api_request("GET", "/job")
-            cand_res = api_request("GET", "/candidate")
+            job_res = api_request("GET", "/jobs")
+            cand_res = api_request("GET", "/candidates")
 
         if job_res is None or cand_res is None:
             st.stop()
@@ -2685,8 +2685,8 @@ else:
             st.stop()
 
         with st.spinner("Loading candidates and interviews..."):
-            cand_res = api_request("GET", "/candidate")
-            interview_res = api_request("GET", "/interview")
+            cand_res = api_request("GET", "/candidates")
+            interview_res = api_request("GET", "/interviews")
 
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
         interviews = interview_res.json() if (interview_res and interview_res.status_code == 200) else []
@@ -2742,7 +2742,7 @@ else:
                                     "notes": notes.strip() if notes.strip() else None,
                                 }
                                 with st.spinner("Scheduling..."):
-                                    res = api_request("POST", "/interview", json=payload)
+                                    res = api_request("POST", "/interviews", json=payload)
 
                                 if res and res.status_code == 201:
                                     data = res.json()
@@ -2846,7 +2846,7 @@ else:
                     with ic2:
                         new_st = st.selectbox("Update Status", ["Scheduled", "Completed", "Cancelled"], index=["Scheduled", "Completed", "Cancelled"].index(iv["status"]), key=f"status_sel_{iv['id']}")
                         if st.button("Update", key=f"btn_update_iv_{iv['id']}"):
-                            patch_r = api_request("PATCH", f"/interview/{iv['id']}/status?new_status={new_st}")
+                            patch_r = api_request("PATCH", f"/interviews/{iv['id']}/status?new_status={new_st}")
                             if patch_r and patch_r.status_code == 200:
                                 st.toast("✅ Status updated!")
                                 time.sleep(0.4)
@@ -2888,7 +2888,7 @@ else:
             st.warning("⛔ Access Restricted: Only Recruiters and Admins can upload resumes.")
         else:
             with st.spinner("Loading available job roles..."):
-                job_res_up = api_request("GET", "/job")
+                job_res_up = api_request("GET", "/jobs")
             jobs_for_upload = []
             if job_res_up and job_res_up.status_code == 200:
                 jobs_for_upload = job_res_up.json()
@@ -3029,8 +3029,8 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading comparison data..."):
-            cand_res = api_request("GET", "/candidate")
-            job_res = api_request("GET", "/job")
+            cand_res = api_request("GET", "/candidates")
+            job_res = api_request("GET", "/jobs")
 
         if cand_res is None or job_res is None or cand_res.status_code != 200 or job_res.status_code != 200:
             st.error("Failed to load candidates or jobs for comparison.")
@@ -3235,7 +3235,7 @@ else:
                 ]
                 success_count = 0
                 for job_data in jobs_to_seed:
-                    res = api_request("POST", "/job", json=job_data)
+                    res = api_request("POST", "/jobs", json=job_data)
                     if res and res.status_code == 201:
                         success_count += 1
                 if success_count > 0:
@@ -3252,7 +3252,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading candidate list..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
 
         tab_assign, tab_status, tab_results = st.tabs([
@@ -3548,7 +3548,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading candidate profiles..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
 
         if not candidates:
@@ -3683,7 +3683,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading predictive models..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
         candidates = cand_res.json() if (cand_res and cand_res.status_code == 200) else []
 
         # Candidate Selector for prediction
@@ -3823,7 +3823,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading your profile..."):
-            cand_res = api_request("GET", "/candidate")
+            cand_res = api_request("GET", "/candidates")
 
         if cand_res is not None and cand_res.status_code == 200:
             candidates = cand_res.json()
@@ -3874,7 +3874,7 @@ else:
                     with st.container(border=True):
                         st.subheader("📊 Compatibility Scoring")
                         with st.spinner("Loading jobs..."):
-                            job_res = api_request("GET", "/job")
+                            job_res = api_request("GET", "/jobs")
                         if job_res is not None and job_res.status_code == 200:
                             jobs = job_res.json()
                             if not jobs:
@@ -3942,7 +3942,7 @@ else:
         st.markdown("---")
 
         with st.spinner("Loading open positions..."):
-            job_res = api_request("GET", "/job")
+            job_res = api_request("GET", "/jobs")
 
         if job_res is not None and job_res.status_code == 200:
             jobs = job_res.json()

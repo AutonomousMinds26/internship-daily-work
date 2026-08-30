@@ -34,7 +34,6 @@ def log_candidate_history(db: Session, candidate_id: int, action: str, details: 
     except Exception as e:
         logger.error(f"Failed to log history for candidate {candidate_id}: {str(e)}")
 
-@router.post("/interview", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/interviews", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
 def schedule_interview(
     interview_in: InterviewCreate,
@@ -103,7 +102,6 @@ def schedule_interview(
     return db_interview
 
 
-@router.get("/interview", response_model=List[InterviewResponse])
 @router.get("/interviews", response_model=List[InterviewResponse])
 def get_interviews(
     candidate_id: Optional[int] = None,
@@ -131,100 +129,8 @@ def get_interviews(
     return interviews
 
 
-@router.get("/interview/{interview_id}", response_model=InterviewResponse)
-@router.get("/interviews/{interview_id}", response_model=InterviewResponse)
-def get_interview_by_id(
-    interview_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(any_auth_checker)
-):
-    """
-    Get interview details by ID.
-    """
-    interview = db.query(Interview).filter(Interview.id == interview_id).first()
-    if not interview:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview with ID {interview_id} not found."
-        )
-    return interview
+# --- Slot Management Endpoints (Static paths before parameterized paths) ---
 
-
-@router.put("/interview/{interview_id}", response_model=InterviewResponse)
-@router.put("/interviews/{interview_id}", response_model=InterviewResponse)
-def update_interview(
-    interview_id: int,
-    interview_in: InterviewUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(recruiter_manager_checker)
-):
-    """
-    Update interview details. Restricted to Recruiter, Hiring Manager, and Admin.
-    """
-    logger.info(f"Updating interview {interview_id}")
-    interview = db.query(Interview).filter(Interview.id == interview_id).first()
-    if not interview:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview with ID {interview_id} not found."
-        )
-
-    update_data = interview_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(interview, field, value)
-
-    db.commit()
-    db.refresh(interview)
-
-    log_candidate_history(
-        db, 
-        int(cast(Any, interview.candidate_id)), 
-        "Interview Updated", 
-        f"Updated interview details: {list(update_data.keys())}", 
-        str(current_user.username)
-    )
-
-    logger.info(f"Interview {interview_id} updated successfully")
-    return interview
-
-
-@router.delete("/interview/{interview_id}", status_code=status.HTTP_200_OK)
-@router.delete("/interviews/{interview_id}", status_code=status.HTTP_200_OK)
-def cancel_interview(
-    interview_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(recruiter_manager_checker)
-):
-    """
-    Cancel / Delete an interview. Restricted to Recruiter, Hiring Manager, and Admin.
-    """
-    logger.info(f"Cancelling/Deleting interview {interview_id}")
-    interview = db.query(Interview).filter(Interview.id == interview_id).first()
-    if not interview:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Interview with ID {interview_id} not found."
-        )
-
-    candidate_id = interview.candidate_id
-    db.delete(interview)
-    db.commit()
-
-    log_candidate_history(
-        db, 
-        int(cast(Any, candidate_id)), 
-        "Interview Cancelled", 
-        f"Interview ID {interview_id} was cancelled/deleted", 
-        str(current_user.username)
-    )
-
-    logger.info(f"Interview {interview_id} deleted successfully.")
-    return {"detail": f"Interview with ID {interview_id} deleted successfully."}
-
-
-# --- Slot Management & iCal Download Endpoints ---
-
-@router.get("/slots", response_model=List[InterviewSlotResponse])
 @router.get("/interviews/slots", response_model=List[InterviewSlotResponse])
 def list_available_slots(
     db: Session = Depends(get_db),
@@ -236,7 +142,6 @@ def list_available_slots(
     return db.query(InterviewSlot).filter(InterviewSlot.is_booked == False).all()
 
 
-@router.post("/slots", response_model=InterviewSlotResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/interviews/slots", response_model=InterviewSlotResponse, status_code=status.HTTP_201_CREATED)
 def create_interview_slot(
     slot_in: InterviewSlotCreate,
@@ -260,7 +165,6 @@ def create_interview_slot(
     return slot
 
 
-@router.post("/slots/{slot_id}/book", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/interviews/slots/{slot_id}/book", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
 def book_interview_slot(
     slot_id: int,
@@ -332,7 +236,97 @@ def book_interview_slot(
     return interview
 
 
-@router.get("/interview/{interview_id}/invite")
+@router.get("/interviews/{interview_id}", response_model=InterviewResponse)
+def get_interview_by_id(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(any_auth_checker)
+):
+    """
+    Get interview details by ID.
+    """
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interview with ID {interview_id} not found."
+        )
+    return interview
+
+
+@router.put("/interviews/{interview_id}", response_model=InterviewResponse)
+def update_interview(
+    interview_id: int,
+    interview_in: InterviewUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(recruiter_manager_checker)
+):
+    """
+    Update interview details. Restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Updating interview {interview_id}")
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interview with ID {interview_id} not found."
+        )
+
+    update_data = interview_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(interview, field, value)
+
+    db.commit()
+    db.refresh(interview)
+
+    log_candidate_history(
+        db, 
+        int(cast(Any, interview.candidate_id)), 
+        "Interview Updated", 
+        f"Updated interview details: {list(update_data.keys())}", 
+        str(current_user.username)
+    )
+
+    logger.info(f"Interview {interview_id} updated successfully")
+    return interview
+
+
+@router.delete("/interviews/{interview_id}", status_code=status.HTTP_200_OK)
+def cancel_interview(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(recruiter_manager_checker)
+):
+    """
+    Cancel / Delete an interview. Restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Cancelling/Deleting interview {interview_id}")
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interview with ID {interview_id} not found."
+        )
+
+    candidate_id = interview.candidate_id
+    db.delete(interview)
+    db.commit()
+
+    log_candidate_history(
+        db, 
+        int(cast(Any, candidate_id)), 
+        "Interview Cancelled", 
+        f"Interview ID {interview_id} was cancelled/deleted", 
+        str(current_user.username)
+    )
+
+    logger.info(f"Interview {interview_id} deleted successfully.")
+    return {"detail": f"Interview with ID {interview_id} deleted successfully."}
+
+
+
+
+
 @router.get("/interviews/{interview_id}/invite")
 def download_calendar_invite(
     interview_id: int,
@@ -373,4 +367,29 @@ def download_calendar_invite(
             "Content-Disposition": f"attachment; filename=interview_{interview_id}.ics"
         }
     )
+
+
+@router.patch("/interviews/{interview_id}/status", response_model=InterviewResponse)
+def update_interview_status(
+    interview_id: int,
+    new_status: str,
+    db: Session = Depends(get_db),
+    _current_user = Depends(recruiter_manager_checker)
+):
+    """
+    Update interview status. Access restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Updating interview {interview_id} status to {new_status}")
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        logger.warning(f"Interview {interview_id} not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Interview with ID {interview_id} not found."
+        )
+    interview.status = new_status
+    db.commit()
+    db.refresh(interview)
+    logger.info(f"Interview {interview_id} status updated successfully to {new_status}")
+    return interview
 

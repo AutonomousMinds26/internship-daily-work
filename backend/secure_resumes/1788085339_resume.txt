@@ -1,0 +1,4 @@
+John Smith
+Email: john.smith@example.com
+Skills: Java, SQL
+Experience: 2 years

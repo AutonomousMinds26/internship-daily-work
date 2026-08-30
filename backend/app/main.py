@@ -145,12 +145,40 @@ async def lifespan(app: FastAPI):
     # Shutdown: Clean up if needed
     logger.info("Application shutting down...")
 
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
+import redis
+
 app = FastAPI(
     title="RecruiterAI API",
     description="Backend API for candidate resumes, jobs screening, interview scheduling, and candidate status management.",
     version="1.0.0",
     lifespan=lifespan
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    logger.error(f"Database connection exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Database connection error. Please try again later."}
+    )
+
+@app.exception_handler(redis.exceptions.RedisError)
+async def redis_exception_handler(request: Request, exc: redis.exceptions.RedisError):
+    logger.error(f"Redis cache exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Cache service error. Please try again."}
+    )
 
 # Custom HTTP Middleware for detailed request logging and error handling
 @app.middleware("http")

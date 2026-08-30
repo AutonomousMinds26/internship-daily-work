@@ -14,7 +14,7 @@ def get_token(client, username, password="password123"):
 def setup_candidate_and_job(client, token):
     # Create Job
     job_res = client.post(
-        "/job",
+        "/jobs",
         json={
             "title": "Backend Developer",
             "description": "Build APIs using Python and FastAPI.",
@@ -139,7 +139,7 @@ def test_candidate_journey_history(client):
 
     # Change candidate status
     status_res = client.patch(
-        f"/candidate/{cand_id}/status",
+        f"/candidates/{cand_id}/status",
         json={"status": "Shortlisted"},
         headers={"Authorization": f"Bearer {token}"}
     )
@@ -189,7 +189,7 @@ def test_interview_slot_booking_and_invite(client):
 
     # 1. Create slot
     slot_res = client.post(
-        "/slots",
+        "/interviews/slots",
         json={
             "interviewer_name": "Dave Interviewer",
             "interviewer_email": "dave@example.com",
@@ -203,7 +203,7 @@ def test_interview_slot_booking_and_invite(client):
 
     # 2. List slots
     list_res = client.get(
-        "/slots",
+        "/interviews/slots",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert list_res.status_code == 200
@@ -213,7 +213,7 @@ def test_interview_slot_booking_and_invite(client):
 
     # 3. Book slot
     book_res = client.post(
-        f"/slots/{slot_id}/book",
+        f"/interviews/slots/{slot_id}/book",
         json={
             "candidate_id": cand_id,
             "job_id": job_id

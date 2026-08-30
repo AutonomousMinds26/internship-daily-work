@@ -1,0 +1,4 @@
+Alice Cooper
+Email: alice@example.com
+Experience: 2 years
+Skills: Python, FastAPI, Git

@@ -90,7 +90,7 @@ def test_api_routes(client):
 
     # Create Job
     job_res = client.post(
-        "/job",
+        "/jobs",
         json={
             "title": "FastAPI Developer",
             "description": "FastAPI, Python backend engineer.",
@@ -104,7 +104,7 @@ def test_api_routes(client):
 
     # Create Candidate
     cand_res = client.post(
-        "/candidate/create",
+        "/candidates",
         json={
             "name": "Jane",
             "email": "jane@example.com",
@@ -144,7 +144,7 @@ def test_api_routes(client):
 
     # Verify score is saved on Candidate in DB
     get_cand = client.get(
-        f"/candidate/{cand_id}",
+        f"/candidates/{cand_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert get_cand.status_code == 200

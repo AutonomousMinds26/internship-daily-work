@@ -39,27 +39,27 @@ def ai_match_candidate(candidate, job):
         )
     )
 
-    ai_logger.info(f"Invoking LLM for candidate '{candidate.get('name')}' matching")
-    response = llm.invoke(prompt)
-
-    raw_content = response.content
-    if isinstance(raw_content, str):
-        content = raw_content.strip()
-    elif isinstance(raw_content, list):
-        parts = []
-        for part in raw_content:
-            if isinstance(part, str):
-                parts.append(part)
-            elif isinstance(part, dict) and "text" in part:
-                parts.append(str(part["text"]))
-        content = " ".join(parts).strip()
-    else:
-        content = str(raw_content).strip()
-
-    # Remove markdown if AI returns it
-    content = content.replace("```json", "").replace("```", "").strip()
-
     try:
+        ai_logger.info(f"Invoking LLM for candidate '{candidate.get('name')}' matching")
+        response = llm.invoke(prompt)
+
+        raw_content = response.content
+        if isinstance(raw_content, str):
+            content = raw_content.strip()
+        elif isinstance(raw_content, list):
+            parts = []
+            for part in raw_content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict) and "text" in part:
+                    parts.append(str(part["text"]))
+            content = " ".join(parts).strip()
+        else:
+            content = str(raw_content).strip()
+
+        # Remove markdown if AI returns it
+        content = content.replace("```json", "").replace("```", "").strip()
+
         result = json.loads(content)
 
         final_res = {

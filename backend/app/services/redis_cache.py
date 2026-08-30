@@ -141,3 +141,23 @@ def cache_llm_response(prompt_key: str, response_data: dict, ttl: int = 7200):
     except Exception as e:
         logger.error(f"Redis set failed for LLM key {prompt_key}: {str(e)}")
 
+
+# --- Token Blacklisting ---
+def blacklist_token(token: str, ttl: int):
+    if not redis_client:
+        return
+    try:
+        redis_client.setex(f"blacklist:{token}", ttl, "1")
+        logger.info(f"TOKEN BLACKLIST: Blacklisted token with TTL={ttl}s.")
+    except Exception as e:
+        logger.error(f"Failed to blacklist token in Redis: {str(e)}")
+
+def is_token_blacklisted(token: str) -> bool:
+    if not redis_client:
+        return False
+    try:
+        return redis_client.exists(f"blacklist:{token}") > 0
+    except Exception as e:
+        logger.error(f"Failed to check token blacklist in Redis: {str(e)}")
+        return False
+

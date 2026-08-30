@@ -55,6 +55,9 @@ def run_db_migrations():
         if not column_exists("candidates", "ai_summary"):
             cursor.execute("ALTER TABLE candidates ADD COLUMN ai_summary TEXT")
             logger.info("Migration: Added column 'ai_summary' to 'candidates'")
+        if not column_exists("candidates", "feedback"):
+            cursor.execute("ALTER TABLE candidates ADD COLUMN feedback TEXT")
+            logger.info("Migration: Added column 'feedback' to 'candidates'")
         if not column_exists("candidates", "resume_hash"):
             cursor.execute("ALTER TABLE candidates ADD COLUMN resume_hash VARCHAR")
             logger.info("Migration: Added column 'resume_hash' to 'candidates'")

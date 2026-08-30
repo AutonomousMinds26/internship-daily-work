@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import List, Optional, cast, Any
+from typing import List, Optional, cast, Any, Union
 import fitz  # PyMuPDF
 import logging
 from datetime import datetime, timezone
+import os
+import re
+import sys
+import time
+import hashlib
+import io
+import docx
 
 
 from app.database import get_db
@@ -11,7 +18,7 @@ from app.models import Candidate, Job, CandidateScore, Recommendation, Candidate
 from app.schemas import (
     CandidateCreate, CandidateUpdate, CandidateResponse, 
     ScoreResponse, MatchDetails, CandidateStatusUpdate, UploadResumeResponse,
-    CandidateHistoryResponse
+    CandidateHistoryResponse, FeedbackUpdate
 )
 from app.auth import RoleChecker, get_current_user, User
 from app.services.extractor import extract_candidate_info
@@ -30,7 +37,7 @@ recruiter_admin_checker = RoleChecker(allowed_roles=["Recruiter", "Admin"])
 any_auth_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin", "Candidate"])
 status_update_checker = RoleChecker(allowed_roles=["Recruiter", "Hiring Manager", "Admin"])
 
-VALID_STATUSES = ["Applied", "Parsed", "Matched", "Shortlisted", "Interview Scheduled", "Selected", "Rejected", "Screening", "Interview"]
+VALID_STATUSES = ["Applied", "Screening", "Shortlisted", "Interview", "Selected", "Hired", "Rejected", "Parsed", "Matched", "Interview Scheduled"]
 
 def log_candidate_history(db: Session, candidate_id: int, action: str, details: Optional[str] = None, performed_by: Optional[str] = None):
     """Helper to append a history record for a candidate."""
@@ -74,7 +81,6 @@ def serialize_candidate(c: Candidate) -> dict:
 # --- CANDIDATE CRUD APIs ---
 
 @router.post("/candidates", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/candidate/create", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
 def create_candidate(
     candidate_in: CandidateCreate,
     db: Session = Depends(get_db),
@@ -104,18 +110,65 @@ def create_candidate(
     return db_candidate
 
 
-@router.get("/candidates", response_model=List[CandidateResponse])
+@router.get("/candidates", response_model=Union[List[CandidateResponse], CandidateResponse])
 def list_all_candidates(
+    id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: User = Depends(any_auth_checker)
 ):
     """
-    List all candidates in the database.
+    List candidates with pagination, search, status filter, or retrieve a single candidate if id is provided.
     """
     current_user_any = cast(Any, _current_user)
+    
+    # If a specific ID is requested (legacy cache-aside strategy support)
+    if id is not None:
+        cached_cand = get_cached_candidate(id)
+        if cached_cand:
+            if current_user_any.role == "Candidate" and cached_cand["email"] != current_user_any.username:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to other candidates' profiles."
+                )
+            return cached_cand
+        
+        candidate = db.query(Candidate).filter(Candidate.id == id).first()
+        if not candidate:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Candidate with ID {id} not found."
+            )
+        if current_user_any.role == "Candidate" and str(candidate.email) != current_user_any.username:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to other candidates' profiles."
+            )
+        cand_dict = serialize_candidate(candidate)
+        cache_candidate(id, cand_dict)
+        return candidate
+
+    # Standard listing with pagination and filters
+    query = db.query(Candidate)
+    
     if current_user_any.role == "Candidate":
-        return db.query(Candidate).filter(Candidate.email == current_user_any.username).all()
-    return db.query(Candidate).all()
+        query = query.filter(Candidate.email == current_user_any.username)
+    else:
+        if status:
+            query = query.filter(Candidate.status == status)
+        if search:
+            query = query.filter(
+                (Candidate.name.contains(search)) | 
+                (Candidate.email.contains(search)) | 
+                (Candidate.skills.contains(search))
+            )
+            
+    # Apply database pagination
+    query = query.offset(skip).limit(limit)
+    return query.all()
 
 
 @router.get("/candidates-with-details", response_model=List[dict])
@@ -193,7 +246,6 @@ def list_candidates_with_details(
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateResponse)
-@router.get("/candidate/{candidate_id}", response_model=CandidateResponse)
 def get_candidate_by_id(
     candidate_id: int,
     db: Session = Depends(get_db),
@@ -222,7 +274,6 @@ def get_candidate_by_id(
 
 
 @router.put("/candidates/{candidate_id}", response_model=CandidateResponse)
-@router.put("/candidate/{candidate_id}", response_model=CandidateResponse)
 def update_candidate(
     candidate_id: int,
     candidate_in: CandidateUpdate,
@@ -258,7 +309,6 @@ def update_candidate(
 
 
 @router.delete("/candidates/{candidate_id}", status_code=status.HTTP_200_OK)
-@router.delete("/candidate/{candidate_id}", status_code=status.HTTP_200_OK)
 def delete_candidate(
     candidate_id: int,
     db: Session = Depends(get_db),
@@ -287,7 +337,7 @@ async def upload_resume(
     _current_user: User = Depends(recruiter_admin_checker)
 ):
     """
-    Upload resume (PDF or TXT), select Job Role, fetch Job Description, 
+    Upload resume (PDF, TXT, or DOCX), select Job Role, fetch Job Description, 
     extract candidate details, extract job details, run AI matcher, 
     save results, and return JSON.
     Access restricted to Recruiters and Admins.
@@ -319,12 +369,49 @@ async def upload_resume(
             )
 
     # 2. Extract text from uploaded file
-    filename = (file.filename or "").lower()
+    filename_raw = file.filename or "resume.txt"
+    # Sanitization to prevent directory traversal
+    cleaned_filename = re.sub(r"[^a-zA-Z0-9\._\-]", "_", os.path.basename(filename_raw))
+    if not cleaned_filename or cleaned_filename in [".", ".."]:
+        cleaned_filename = "uploaded_resume.txt"
+        
+    file_ext = cleaned_filename.split(".")[-1].lower() if "." in cleaned_filename else ""
+    file_type = file_ext
+    if file_ext not in ["pdf", "txt", "docx"]:
+        logger.warning(f"Unsupported file type uploaded: {file_ext}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Only PDF, TXT, and DOCX resumes are supported."
+        )
+        
+    # File size validation (limit to 5MB)
+    MAX_FILE_SIZE = 5 * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds the maximum limit of 5MB."
+        )
+        
+    # Securely store file locally
+    UPLOAD_DIR = os.path.join(os.getcwd(), "secure_resumes")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    safe_name = f"{int(time.time())}_{cleaned_filename}"
+    resume_path = os.path.join(UPLOAD_DIR, safe_name)
+    
+    try:
+        with open(resume_path, "wb") as f_out:
+            f_out.write(contents)
+    except Exception as e:
+        logger.error(f"Failed to securely save resume to disk: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save uploaded file safely."
+        )
+
     text = ""
-    file_type = "pdf" if filename.endswith(".pdf") else "txt" if filename.endswith(".txt") else "unknown"
-    if filename.endswith(".pdf"):
+    if file_ext == "pdf":
         try:
-            contents = await file.read()
             doc = fitz.open(stream=contents, filetype="pdf")
             for page in doc:
                 text += str(page.get_text())
@@ -335,9 +422,24 @@ async def upload_resume(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to parse PDF resume: {str(e)}"
             )
-    elif filename.endswith(".txt"):
+    elif file_ext == "docx":
         try:
-            contents = await file.read()
+            doc = docx.Document(io.BytesIO(contents))
+            paragraphs_text = [p.text for p in doc.paragraphs]
+            tables_text = []
+            for t in doc.tables:
+                for row in t.rows:
+                    for cell in row.cells:
+                        tables_text.append(cell.text)
+            text = "\n".join(paragraphs_text + tables_text)
+        except Exception as e:
+            logger.error(f"Failed parsing DOCX {file.filename}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to parse DOCX resume: {str(e)}"
+            )
+    elif file_ext == "txt":
+        try:
             text = contents.decode("utf-8")
         except Exception as e:
             logger.error(f"Failed parsing TXT {file.filename}: {str(e)}")
@@ -345,12 +447,6 @@ async def upload_resume(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to parse TXT resume: {str(e)}"
             )
-    else:
-        logger.warning(f"Unsupported file type uploaded: {file.filename}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file format. Only PDF and TXT resumes are supported."
-        )
 
     if not text.strip():
         raise HTTPException(
@@ -359,15 +455,11 @@ async def upload_resume(
         )
 
     # Calculate SHA-256 resume hash for duplicate detection
-    import hashlib
     resume_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 
     # 3. Setup path and imports for AI pipeline
-    import sys
-    import os
-    
     ai_dir = os.path.join(os.path.dirname(__file__), "..", "..", "AI")
     if ai_dir not in sys.path:
         sys.path.append(ai_dir)
@@ -419,7 +511,6 @@ async def upload_resume(
             except Exception:
                 experience_years = 0
         else:
-            import re
             match = re.search(r'(\d+)', str(exp_val))
             experience_years = int(match.group(1)) if match else 0
 
@@ -673,67 +764,7 @@ async def upload_resume(
     }
 
 
-@router.get("/candidate", response_model=None)
-def get_candidate(
-    id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    _current_user: User = Depends(any_auth_checker)
-):
-    """
-    Get all candidates or retrieve a single candidate by query param (uses cache-aside strategy).
-    """
-    current_user_any = cast(Any, _current_user)
-    if current_user_any.role == "Candidate":
-        if id is not None:
-            cached_cand = get_cached_candidate(id)
-            if cached_cand:
-                if cached_cand["email"] != current_user_any.username:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Access denied to other candidates' profiles."
-                    )
-                return cached_cand
-            
-            candidate = db.query(Candidate).filter(Candidate.id == id).first()
-            if not candidate:
-                logger.warning(f"Candidate {id} not found in DB.")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Candidate with ID {id} not found."
-                )
-            if str(candidate.email) != current_user_any.username:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied to other candidates' profiles."
-                )
-            cand_dict = serialize_candidate(candidate)
-            cache_candidate(id, cand_dict)
-            return candidate
-        else:
-            logger.info(f"Candidate {current_user_any.username} retrieving their own profile.")
-            candidate = db.query(Candidate).filter(Candidate.email == current_user_any.username).first()
-            return [candidate] if candidate else []
-
-    if id is not None:
-        cached_cand = get_cached_candidate(id)
-        if cached_cand:
-            return cached_cand
-
-        candidate = db.query(Candidate).filter(Candidate.id == id).first()
-        if not candidate:
-            logger.warning(f"Candidate {id} not found in DB.")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Candidate with ID {id} not found."
-            )
-        
-        cand_dict = serialize_candidate(candidate)
-        cache_candidate(id, cand_dict)
-        return candidate
-    else:
-        logger.info("Retrieving all candidates from DB.")
-        candidates = db.query(Candidate).all()
-        return candidates
+# Singular GET /candidate endpoint removed. Unified with GET /candidates.
 
 @router.get("/score", response_model=ScoreResponse)
 def get_score(
@@ -820,7 +851,6 @@ def get_score(
     cache_score(candidate_id, job_id, resp.model_dump())
     return resp
 
-@router.patch("/candidate/{candidate_id}/status", response_model=CandidateResponse)
 @router.patch("/candidates/{candidate_id}/status", response_model=CandidateResponse)
 def update_candidate_status(
     candidate_id: int,
@@ -860,7 +890,6 @@ def update_candidate_status(
 
 
 @router.get("/candidates/{candidate_id}/history", response_model=List[CandidateHistoryResponse])
-@router.get("/candidate/{candidate_id}/history", response_model=List[CandidateHistoryResponse])
 def get_candidate_history(
     candidate_id: int,
     db: Session = Depends(get_db),
@@ -883,6 +912,37 @@ def get_candidate_history(
 
     history = db.query(CandidateHistory).filter(CandidateHistory.candidate_id == candidate_id).order_by(CandidateHistory.created_at.desc()).all()
     return history
+
+
+@router.patch("/candidates/{candidate_id}/feedback", response_model=CandidateResponse)
+def update_candidate_feedback(
+    candidate_id: int,
+    fb_in: FeedbackUpdate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(status_update_checker)
+):
+    """
+    Update candidate feedback notes. Access restricted to Recruiter, Hiring Manager, and Admin.
+    """
+    logger.info(f"Updating feedback for candidate {candidate_id}")
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        logger.warning(f"Candidate {candidate_id} not found for feedback update.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with ID {candidate_id} not found."
+        )
+
+    setattr(candidate, "feedback", fb_in.feedback)
+    db.commit()
+    db.refresh(candidate)
+
+    invalidate_candidate(cast(int, candidate.id))
+    cache_candidate(cast(int, candidate.id), serialize_candidate(candidate))
+    log_candidate_history(db, cast(int, candidate.id), "Feedback Saved", "Recruiter feedback updated", str(_current_user.username))
+
+    logger.info(f"Candidate {candidate_id} feedback updated successfully.")
+    return candidate
 
 
 

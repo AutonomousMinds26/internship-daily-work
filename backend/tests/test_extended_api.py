@@ -21,7 +21,7 @@ def test_source_candidate_success(client):
     
     # 1. Create a job first
     job_res = client.post(
-        "/job",
+        "/jobs",
         json={
             "title": "Data Scientist",
             "description": "Python, ML, SQL skills required.",

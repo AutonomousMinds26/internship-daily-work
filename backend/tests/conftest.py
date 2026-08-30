@@ -27,6 +27,9 @@ class MockRedis:
             return 1
         return 0
 
+    def exists(self, key):
+        return 1 if key in self.store else 0
+
 # Set up in-memory SQLite database for testing with StaticPool
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(

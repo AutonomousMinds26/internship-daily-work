@@ -1,0 +1,4 @@
+Bob Taylor
+Email: bob.taylor@example.com
+Skills: Python
+Experience: 1 year

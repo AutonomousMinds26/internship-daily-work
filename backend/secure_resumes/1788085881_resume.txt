@@ -1,0 +1,9 @@
+Jane Doe
+Email: jane.doe@example.com
+Phone: 9876543210
+Experience: 5 years of experience
+Skills: Python, FastAPI, Docker, SQL, React
+Education: Bachelor of Engineering
+Location: Bangalore
+Expected CTC: 15 LPA
+Notice Period: 30 days
